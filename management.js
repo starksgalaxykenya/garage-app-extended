@@ -814,70 +814,84 @@ window.deleteSupplier = deleteSupplier;
 
 
 // =================================================================
-// 7. RECEIPT & INVOICE LOGIC (Requirement 3)
+// 7. RECEIPT & INVOICE LOGIC (FIXED: Qty, Delete, Auto-Calculation)
 // =================================================================
 
 /**
- * Calculates the total amount for invoices/quotes in real-time. (Requirement 3 & 4: Updated to handle Quantity)
+ * Adds a new item row to the Invoice form.
+ */
+function addInvoiceItemRow() {
+    const container = document.getElementById('invoice-items-container');
+    const row = document.createElement('div');
+    row.className = 'flex space-x-2 item-row invoice-item-row mb-2';
+    row.innerHTML = `
+        <input type="text" placeholder="Description" class="invoice-item-desc form-input flex-grow">
+        <input type="number" placeholder="Qty" value="1" min="1" class="invoice-item-qty form-input w-16" oninput="calculateTotal('invoice')">
+        <input type="number" placeholder="Unit Price ($)" value="0.00" min="0" step="0.01" class="invoice-item-unit-price form-input w-28" oninput="calculateTotal('invoice')">
+        <input type="text" placeholder="Total Amount ($)" value="0.00" class="invoice-item-amount form-input w-32 bg-gray-100" readonly>
+        <button type="button" onclick="this.parentNode.remove(); calculateTotal('invoice');" class="delete-item-btn p-2 text-red-500 hover:text-red-700">X</button>
+    `;
+    container.appendChild(row);
+    calculateTotal('invoice');
+}
+
+/**
+ * Calculates the total amount for invoices/quotes in real-time.
+ * Calculates (Qty * UnitPrice) for each item and updates the total.
  */
 function calculateTotal(type) {
     const container = document.getElementById(`${type}-items-container`);
-    const itemRows = container.querySelectorAll(`.${type}-item-row`); // Select item rows now
+    // NOTE: We use the explicit class names from the row helper functions
+    const itemRows = container.querySelectorAll(`.${type}-item-row`); 
     let total = 0;
     
     itemRows.forEach(row => {
-        const quantity = parseFloat(row.querySelector(`.${type}-item-quantity`).value) || 0;
-        const amount = parseFloat(row.querySelector(`.${type}-item-amount`).value) || 0; // This is unit price
-        total += (quantity * amount);
+        // Read values from the explicit input fields
+        const qty = parseFloat(row.querySelector(`.${type}-item-qty`).value) || 0;
+        const unitPrice = parseFloat(row.querySelector(`.${type}-item-unit-price`).value) || 0;
+        const itemAmount = qty * unitPrice;
+
+        // Update the item's line total display (read-only field)
+        const lineTotalInput = row.querySelector(`.${type}-item-amount`);
+        if (lineTotalInput) {
+            lineTotalInput.value = itemAmount.toFixed(2);
+        }
+        
+        total += itemAmount;
     });
-    
+
     document.getElementById(`${type}-total-display`).textContent = `$${total.toFixed(2)}`;
     return total;
 }
 
 /**
- * Attaches listeners to quantity and amount inputs for real-time total calculation. (Requirement 3 & 4: Updated listeners)
- */
-function attachAmountListeners(type) {
-    const container = document.getElementById(`${type}-items-container`);
-    // Select all quantity and amount inputs
-    const inputs = container.querySelectorAll(`.${type}-item-quantity, .${type}-item-amount`); 
-
-    inputs.forEach(input => {
-        // We only need to attach one listener per input that triggers the full calculation
-        input.removeEventListener('input', () => calculateTotal(type)); 
-        input.addEventListener('input', () => calculateTotal(type));
-    });
-    // Run initial calculation after attaching listeners
-    calculateTotal(type);
-}
-
-// Initial attachment of listeners
-document.addEventListener('DOMContentLoaded', () => {
-    // Only attach to existing rows, which are now correctly defined in management.html
-    attachAmountListeners('invoice');
-    attachAmountListeners('quote');
-});
-
-
-/**
- * Submits and commits a new Invoice.
+ * Submits and commits a new Invoice. (FIXED: Uses correct selectors and saves Qty/Unit Price)
  */
 invoiceCreationForm.addEventListener('submit', async (e) => {
     e.preventDefault();
     const totalAmount = calculateTotal('invoice');
 
     const items = [];
-    document.querySelectorAll('#invoice-items-container .item-row').forEach(row => {
-        const quantity = parseFloat(row.querySelector('.item-quantity').value) || 0;
-        const unitPrice = parseFloat(row.querySelector('.item-amount').value) || 0;
-        items.push({
-            description: row.querySelector('.item-desc').value,
-            quantity: quantity, // New field (Requirement 3)
-            unitPrice: unitPrice, // New field (Requirement 3)
-            amount: quantity * unitPrice // Total for the line item
-        });
+    document.querySelectorAll('#invoice-items-container .invoice-item-row').forEach(row => {
+        // Use the explicit selectors defined in addInvoiceItemRow
+        const quantity = parseFloat(row.querySelector('.invoice-item-qty').value) || 0;
+        const unitPrice = parseFloat(row.querySelector('.invoice-item-unit-price').value) || 0;
+        const lineTotal = quantity * unitPrice;
+
+        if (lineTotal > 0) {
+             items.push({
+                description: row.querySelector('.invoice-item-desc').value,
+                quantity: quantity, 
+                unitPrice: unitPrice, 
+                amount: lineTotal 
+            });
+        }
     });
+
+    if (items.length === 0) {
+        alert("Please add at least one item to the invoice with a total amount greater than zero.");
+        return;
+    }
 
     const invoice = {
         invoiceNo: `INV-${Date.now().toString().slice(-6)}`,
@@ -910,7 +924,7 @@ invoiceCreationForm.addEventListener('submit', async (e) => {
         
         invoiceCreationForm.reset();
         document.getElementById('invoice-items-container').innerHTML = ''; // Clear items
-        addInvoiceItemRow(); // Add back one empty row (defined in management.html script block)
+        addInvoiceItemRow(); // Add back one empty row
         alert('Invoice committed and amount reflected in Finance successfully!');
     } catch (error) {
         alert('Failed to generate or commit invoice.');
@@ -974,8 +988,8 @@ async function generateInvoicePDF(invoiceId, clientPhone) {
         // Items Table
         const itemBody = invoice.items.map(item => [
             item.description, 
-            item.quantity.toString(), // New column
-            `$${item.unitPrice.toFixed(2)}`, // New column (assuming data is stored as unitPrice)
+            item.quantity.toString(), // New column (FIXED: now has data due to updated form listener)
+            `$${item.unitPrice.toFixed(2)}`, // New column 
             `$${item.amount.toFixed(2)}` // Line Total
         ]);
         
@@ -983,7 +997,8 @@ async function generateInvoicePDF(invoiceId, clientPhone) {
             startY: 70,
             head: [['Description', 'Qty', 'Unit Price ($)', 'Line Total ($)']], // Updated header
             body: itemBody,
-            foot: [['', '', 'Total', `$${invoice.total.toFixed(2)}`]],
+            // Adjusted footer to match the 4 columns: [empty, empty, 'Total', amount]
+            foot: [['', '', 'Total', `$${invoice.total.toFixed(2)}`]], 
             theme: 'grid',
             styles: { fontSize: 10 },
             headStyles: { fillColor: [50, 50, 100] },
@@ -1018,11 +1033,46 @@ window.deleteInvoice = deleteInvoice;
 
 
 // =================================================================
-// 8. REPAIR QUOTES LOGIC (Requirement 4)
+// 8. REPAIR QUOTES LOGIC (FIXED: Qty, Delete, Auto-Calculation)
 // =================================================================
 
 /**
- * Submits and saves a new Quote.
+ * Adds a new item row to the Quote form.
+ */
+function addQuoteItemRow() {
+    const container = document.getElementById('quote-items-container');
+    const row = document.createElement('div');
+    row.className = 'flex space-x-2 item-row quote-item-row mb-2';
+    row.innerHTML = `
+        <input type="text" placeholder="Description" class="quote-item-desc form-input flex-grow">
+        <input type="number" placeholder="Qty" value="1" min="1" class="quote-item-qty form-input w-16" oninput="calculateTotal('quote')">
+        <input type="number" placeholder="Unit Price ($)" value="0.00" min="0" step="0.01" class="quote-item-unit-price form-input w-28" oninput="calculateTotal('quote')">
+        <input type="text" placeholder="Total Amount ($)" value="0.00" class="quote-item-amount form-input w-32 bg-gray-100" readonly>
+        <button type="button" onclick="this.parentNode.remove(); calculateTotal('quote');" class="delete-item-btn p-2 text-red-500 hover:text-red-700">X</button>
+    `;
+    container.appendChild(row);
+    calculateTotal('quote');
+}
+
+// Initial item row creation on DOM load (MUST be called once)
+document.addEventListener('DOMContentLoaded', () => {
+    // Check if containers exist before calling, for robustness
+    if (document.getElementById('invoice-items-container')) {
+        addInvoiceItemRow();
+    }
+    if (document.getElementById('quote-items-container')) {
+        addQuoteItemRow();
+    }
+});
+
+// Expose functions to the global scope for use in inline HTML handlers
+window.addInvoiceItemRow = addInvoiceItemRow;
+window.addQuoteItemRow = addQuoteItemRow;
+window.calculateTotal = calculateTotal;
+
+
+/**
+ * Submits and saves a new Quote. (FIXED: Uses correct selectors and saves Qty/Unit Price)
  */
 quoteCreationForm.addEventListener('submit', async (e) => {
     e.preventDefault();
@@ -1030,15 +1080,25 @@ quoteCreationForm.addEventListener('submit', async (e) => {
 
     const items = [];
     document.querySelectorAll('#quote-items-container .quote-item-row').forEach(row => {
-        const quantity = parseFloat(row.querySelector('.quote-item-quantity').value) || 0;
-        const unitPrice = parseFloat(row.querySelector('.quote-item-amount').value) || 0;
-        items.push({
-            description: row.querySelector('.quote-item-desc').value,
-            quantity: quantity, // New field (Requirement 4)
-            unitPrice: unitPrice, // New field (Requirement 4)
-            amount: quantity * unitPrice // Total for the line item
-        });
+        // Use the explicit selectors defined in addQuoteItemRow
+        const quantity = parseFloat(row.querySelector('.quote-item-qty').value) || 0;
+        const unitPrice = parseFloat(row.querySelector('.quote-item-unit-price').value) || 0;
+        const lineTotal = quantity * unitPrice;
+        
+        if (lineTotal > 0) {
+            items.push({
+                description: row.querySelector('.quote-item-desc').value,
+                quantity: quantity, 
+                unitPrice: unitPrice, 
+                amount: lineTotal 
+            });
+        }
     });
+
+    if (items.length === 0) {
+        alert("Please add at least one item to the quote with an estimated total amount greater than zero.");
+        return;
+    }
 
     const quote = {
         quoteNo: `QUO-${Date.now().toString().slice(-6)}`,
@@ -1056,7 +1116,7 @@ quoteCreationForm.addEventListener('submit', async (e) => {
         await quotesRef.add(quote);
         quoteCreationForm.reset();
         document.getElementById('quote-items-container').innerHTML = '';
-        addQuoteItemRow(); // Add back one empty row (defined in management.html script block)
+        addQuoteItemRow(); // Add back one empty row
         alert('Quote generated and saved successfully!');
     } catch (error) {
         alert('Failed to save quote.');
@@ -1123,8 +1183,8 @@ async function generateQuotePDF(quoteId, clientPhone) {
         // Items Table
         const itemBody = quote.items.map(item => [
             item.description, 
-            item.quantity.toString(), // New column
-            `$${item.unitPrice.toFixed(2)}`, // New column (assuming data is stored as unitPrice)
+            item.quantity.toString(), // New column (FIXED: now has data)
+            `$${item.unitPrice.toFixed(2)}`, // New column
             `$${item.amount.toFixed(2)}` // Line Total
         ]);
         
@@ -1132,6 +1192,7 @@ async function generateQuotePDF(quoteId, clientPhone) {
             startY: 75,
             head: [['Item/Service', 'Qty', 'Est. Unit Cost ($)', 'Est. Line Total ($)']], // Updated header
             body: itemBody,
+            // Adjusted footer to match the 4 columns: [empty, empty, 'Estimated Total', amount]
             foot: [['', '', 'Estimated Total', `$${quote.total.toFixed(2)}`]],
             theme: 'grid',
             styles: { fontSize: 10 },
