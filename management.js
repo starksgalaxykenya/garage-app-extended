@@ -874,8 +874,8 @@ invoiceCreationForm.addEventListener('submit', async (e) => {
     const items = [];
     document.querySelectorAll('#invoice-items-container .invoice-item-row').forEach(row => {
         // Use the explicit selectors defined in addInvoiceItemRow
-        const quantity = parseFloat(row.querySelector('.invoice-item-qty').value) || 0;
-        const unitPrice = parseFloat(row.querySelector('.invoice-item-unit-price').value) || 0;
+        const quantity = parseFloat(row.querySelector('.invoice-item-quantity').value) || 0;
+        const unitPrice = parseFloat(row.querySelector('.invoice-item-amount').value) || 0;
         const lineTotal = quantity * unitPrice;
 
         if (lineTotal > 0) {
