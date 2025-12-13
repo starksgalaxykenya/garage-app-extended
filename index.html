@@ -1,0 +1,1104 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>Garage Manager PRO</title>
+    <script src="https://cdn.tailwindcss.com"></script>
+    <script src="https://cdnjs.cloudflare.com/ajax/libs/jspdf/2.5.1/jspdf.umd.min.js"></script>
+    <script src="https://cdnjs.cloudflare.com/ajax/libs/jspdf-autotable/3.5.23/jspdf.plugin.autotable.min.js"></script>
+    
+    <style>
+        /* Custom scrollbar for better look */
+        .custom-scrollbar::-webkit-scrollbar {
+            width: 8px;
+        }
+        .custom-scrollbar::-webkit-scrollbar-track {
+            background: #f1f1f1;
+        }
+        .custom-scrollbar::-webkit-scrollbar-thumb {
+            background: #a0a0a0;
+            border-radius: 4px;
+        }
+        .custom-scrollbar::-webkit-scrollbar-thumb:hover {
+            background: #555;
+        }
+        /* Style for the printable job card (modal visibility) */
+        @media print {
+            body * {
+                visibility: hidden;
+            }
+            #jobCardModal, #jobCardModal * {
+                visibility: visible;
+            }
+            #jobCardModal {
+                position: absolute;
+                left: 0;
+                top: 0;
+                width: 100%;
+            }
+        }
+        /* Style for the checklist tables */
+        .service-table th {
+            text-align: left;
+            padding: 8px 12px;
+            background-color: #eef2ff;
+        }
+        .service-table td {
+            padding: 8px 12px;
+            border-bottom: 1px solid #e5e7eb;
+        }
+
+        /* Modal specific styles */
+        .modal {
+            display: none; /* Hidden by default */
+            position: fixed; 
+            z-index: 100; 
+            left: 0;
+            top: 0;
+            width: 100%; 
+            height: 100%; 
+            overflow: auto; 
+            background-color: rgba(0,0,0,0.4); 
+            justify-content: center;
+            align-items: center;
+        }
+        .modal-content {
+            background-color: #fefefe;
+            margin: auto; 
+            padding: 20px;
+            border-radius: 8px;
+            box-shadow: 0 4px 6px -1px rgba(0, 0, 0, 0.1), 0 2px 4px -2px rgba(0, 0, 0, 0.1);
+            max-width: 90%;
+            max-height: 90%;
+            overflow-y: auto;
+        }
+    </style>
+</head>
+<body class="bg-gray-50 font-sans">
+
+    <header class="bg-blue-800 shadow-lg sticky top-0 z-50">
+        <div class="max-w-7xl mx-auto px-4 sm:px-6 lg:px-8 py-3 flex justify-between items-center">
+            <div>
+                <h1 class="text-3xl font-extrabold text-white">Garage Manager PRO</h1>
+                <p class="text-sm text-blue-200">The Ultimate Auto Service Tool</p>
+            </div>
+            <nav class="flex space-x-4">
+                <button id="nav-car-entry" class="text-white hover:text-blue-200 font-medium transition duration-150">New Car Entry</button>
+                <button id="nav-general-service" class="text-white hover:text-blue-200 font-medium transition duration-150">General Service</button>
+                <button id="nav-clients-list" class="text-white hover:text-blue-200 font-medium transition duration-150">All Clients</button>
+                <button id="nav-car-list" class="text-white hover:text-blue-200 font-medium transition duration-150">Active Jobs</button>
+                <button id="nav-completed-list" class="text-white hover:text-blue-200 font-medium transition duration-150">Completed Jobs</button>
+                
+                <button id="nav-mechanic-portal" class="text-white hover:text-blue-200 font-medium transition duration-150 bg-green-600 px-3 py-1 rounded">Mechanic Portal</button>
+                <button id="nav-finance-portal" class="text-white hover:text-blue-200 font-medium transition duration-150 bg-purple-600 px-3 py-1 rounded">Finance Manager</button>
+                <button id="nav-parts-inventory" class="text-white hover:text-blue-200 font-medium transition duration-150 bg-indigo-600 px-3 py-1 rounded">Parts Inventory</button>
+                <button id="nav-project-cars" class="text-white hover:text-blue-200 font-medium transition duration-150 bg-orange-600 px-3 py-1 rounded">Project Cars</button>
+                <button id="nav-reports-section" class="text-white hover:text-blue-200 font-bold py-2 px-4 rounded-lg bg-yellow-600 hover:bg-yellow-700 transition duration-150">Reports</button>
+                <button id="logoutBtn" class="bg-red-500 hover:bg-red-600 text-white font-bold py-2 px-4 rounded transition duration-150" style="display:none;">Logout</button>
+            </nav>
+        </div>
+    </header>
+
+    <main class="max-w-7xl mx-auto px-4 sm:px-6 lg:px-8 py-8">
+
+        <section id="auth-section" class="flex justify-center items-center py-16" style="display:flex;">
+             <div class="bg-white p-8 rounded-xl shadow-2xl w-full max-w-md">
+                <h2 class="text-2xl font-bold mb-6 text-center text-blue-800">Welcome to Garage Manager PRO</h2>
+                <input id="auth-email" type="email" placeholder="Email" class="w-full p-3 mb-4 border border-gray-300 rounded-lg focus:ring-blue-500 focus:border-blue-500" />
+                <input id="auth-password" type="password" placeholder="Password" class="w-full p-3 mb-6 border border-gray-300 rounded-lg focus:ring-blue-500 focus:border-blue-500" />
+                <button id="loginBtn" onclick="handleLoginSignup(true)" class="w-full bg-blue-600 hover:bg-blue-700 text-white font-bold py-3 rounded-lg transition duration-150 mb-3">Login</button>
+                <button id="signupBtn" onclick="handleLoginSignup(false)" class="w-full bg-gray-500 hover:bg-gray-600 text-white font-bold py-3 rounded-lg transition duration-150">Sign Up (Admin Only)</button>
+                <p id="auth-message" class="text-red-500 text-sm mt-3 text-center"></p>
+            </div>
+        </section>
+        <section id="car-entry" class="space-y-8" style="display:none;">
+            <h2 class="text-3xl font-bold text-gray-800 border-b pb-2">🚗 New Vehicle Check-in</h2>
+            <form id="car-entry-form" class="space-y-6 bg-white p-6 rounded-xl shadow-lg">
+                <fieldset class="border-2 border-orange-200 p-4 rounded-lg">
+                    <legend class="text-xl font-semibold text-orange-700 px-2">Client Contact Details</legend>
+                    <div class="mb-4">
+                        <label for="client-search-entry" class="block text-sm font-medium text-gray-700 mb-1">Search/Select Existing Client (for autofill):</label>
+                        <input id="client-search-entry" type="text" placeholder="Start typing client phone number or name..." 
+                               class="w-full p-3 border rounded-lg focus:ring-purple-500 focus:border-purple-500" 
+                               list="client-suggestions-list" onchange="lookupClientDetails('entry')"/>
+                        <datalist id="client-suggestions-list"></datalist>
+                    </div>
+                    <div class="grid grid-cols-1 md:grid-cols-3 gap-6 mt-4">
+                        <input id="client-name" type="text" placeholder="Client Full Name" required class="p-3 border rounded-lg" />
+                        <input id="client-phone" type="tel" placeholder="Phone Number (e.g., +2547...)" required class="p-3 border rounded-lg" />
+                        <input id="client-email" type="email" placeholder="Email (Optional)" class="p-3 border rounded-lg" />
+                    </div>
+                </fieldset>
+
+                <fieldset class="border-2 border-blue-200 p-4 rounded-lg">
+                    <legend class="text-xl font-semibold text-blue-700 px-2">Vehicle Core Details</legend>
+                    <div class="mb-4">
+                        <label for="car-select-entry" class="block text-sm font-medium text-gray-700 mb-1">Select Existing Vehicle (for this client):</label>
+                        <select id="car-select-entry" class="w-full p-3 border rounded-lg focus:ring-purple-500 focus:border-purple-500" onchange="autofillVehicleDetails('entry')">
+                            <option value="">-- New Vehicle Entry --</option>
+                        </select>
+                    </div>
+                    <div class="grid grid-cols-1 md:grid-cols-3 gap-6 mt-4">
+                        <input id="number-plate" type="text" placeholder="Vehicle Number Plate" required class="p-3 border rounded-lg" />
+                        <input id="vin" type="text" placeholder="VIN / Chassis No." required class="p-3 border rounded-lg" />
+                        <input id="make" type="text" placeholder="Make (e.g., Toyota)" required class="p-3 border rounded-lg" />
+                        <input id="model" type="text" placeholder="Model (e.g., Corolla)" required class="p-3 border rounded-lg" />
+                        <input id="year" type="number" placeholder="Year of Manuf." required class="p-3 border rounded-lg" />
+                        <input id="color" type="text" placeholder="Color" class="p-3 border rounded-lg" />
+                        <input id="engine-cc" type="text" placeholder="Engine CC (e.g., 1800)" class="p-3 border rounded-lg" />
+                        <input id="trim" type="text" placeholder="Trim (e.g., SE)" class="p-3 border rounded-lg" />
+                        <input id="engine-name" type="text" placeholder="Engine Name (e.g., 2ZR-FE)" class="p-3 border rounded-lg" />
+                        
+                        <div>
+                            <label for="transmission" class="block text-sm font-medium text-gray-700 mb-1">Transmission Type</label>
+                            <select id="transmission" class="w-full p-3 border rounded-lg">
+                                <option value="Automatic">Automatic</option>
+                                <option value="Manual">Manual</option>
+                                <option value="AutoManualClutch">Auto Manual (with clutch)</option>
+                                <option value="AutoManualNoClutch">Auto Manual (without clutch)</option>
+                            </select>
+                        </div>
+                        <div>
+                            <label for="drive" class="block text-sm font-medium text-gray-700 mb-1">Drive Type</label>
+                            <select id="drive" class="w-full p-3 border rounded-lg">
+                                <option value="FWD">Front Wheel Drive</option>
+                                <option value="RWD">Rear Wheel Drive</option>
+                                <option value="4WD">Four Wheel Drive (4x4)</option>
+                                <option value="AWD">All Wheel Drive</option>
+                            </select>
+                        </div>
+                    </div>
+                </fieldset>
+
+                <fieldset class="border-2 border-green-200 p-4 rounded-lg">
+                    <legend class="text-xl font-semibold text-green-700 px-2">Service and Job Details</legend>
+                    <div class="grid grid-cols-1 md:grid-cols-2 gap-6 mt-4">
+                        <textarea id="reported-problems" rows="3" placeholder="Client Reported Problems" required class="p-3 border rounded-lg"></textarea>
+                        <textarea id="diagnostic-notes" rows="3" placeholder="Mechanic's Diagnostic Notes" class="p-3 border rounded-lg"></textarea>
+                        
+                        <div>
+                            <label for="assigned-mechanic" class="block text-sm font-medium text-gray-700 mb-1">Assigned Mechanic</label>
+                            <input id="assigned-mechanic" type="text" placeholder="Type Mechanic's Name" required class="w-full p-3 border rounded-lg" list="mechanic-suggestions"/>
+                            <datalist id="mechanic-suggestions">
+                                <option value="John Doe (Mock)">
+                                <option value="Jane Smith (Mock)">
+                            </datalist>
+                        </div>
+
+                        <div>
+                            <label for="due-date" class="block text-sm font-medium text-gray-700 mb-1">Service Due Date</label>
+                            <input id="due-date" type="date" class="w-full p-3 border rounded-lg" />
+                        </div>
+                        <div>
+                            <label for="delivery-date" class="block text-sm font-medium text-gray-700 mb-1">Estimated Delivery Date</label>
+                            <input id="delivery-date" type="date" class="w-full p-3 border rounded-lg" />
+                        </div>
+                    </div>
+                </fieldset>
+                
+                <fieldset class="border-2 border-red-200 p-4 rounded-lg">
+                    <legend class="text-xl font-semibold text-red-700 px-2">Error Codes & Diagnostic</legend>
+                    <div id="error-codes-container" class="space-y-4"> 
+                        </div>
+                    <button type="button" onclick="addErrorCodeInput()" class="mt-4 bg-indigo-500 hover:bg-indigo-600 text-white font-bold py-2 px-4 rounded transition duration-150 flex items-center">
+                        <svg class="w-5 h-5 mr-2" fill="none" stroke="currentColor" viewBox="0 0 24 24" xmlns="http://www.w3.org/2000/svg"><path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M12 9v3m0 0v3m0-3h3m-3 0H9m12 0a9 9 0 11-18 0 9 9 0 0118 0z"></path></svg>
+                        Add Error Code
+                    </button>
+                </fieldset>
+
+                <fieldset class="border-2 border-pink-200 p-4 rounded-lg">
+                    <legend class="text-xl font-semibold text-pink-700 px-2">🛠️ Repair Plan / Required Parts</legend>
+                    <div id="repair-plan-container" class="space-y-4">
+                        </div>
+                    <button type="button" onclick="showSection('parts-inventory'); alert('Parts Inventory section opened. You can link required parts to suppliers from there.')" class="mt-4 bg-gray-500 hover:bg-gray-600 text-white font-bold py-2 px-4 rounded transition duration-150 flex items-center">
+                        <svg class="w-5 h-5 mr-2" fill="none" stroke="currentColor" viewBox="0 0 24 24" xmlns="http://www.w3.org/2000/svg"><path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M17 9V7a2 2 0 00-2-2H5a2 2 0 00-2 2v6a2 2 0 002 2h2m2 4h10a2 2 0 002-2v-6a2 2 0 00-2-2H9a2 2 0 00-2 2v6a2 2 0 002 2zm7-5a2 2 0 11-4 0 2 2 0 014 0z"></path></svg>
+                        Parts/Supplier Link
+                    </button>
+                    <button type="button" onclick="addRepairPlanCard()" class="mt-4 ml-2 bg-pink-500 hover:bg-pink-600 text-white font-bold py-2 px-4 rounded transition duration-150 flex items-center">
+                        <svg class="w-5 h-5 mr-2" fill="none" stroke="currentColor" viewBox="0 0 24 24" xmlns="http://www.w3.org/2000/svg"><path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M12 9v3m0 0v3m0-3h3m-3 0H9m12 0a9 9 0 11-18 0 9 9 0 0118 0z"></path></svg>
+                        Add Repair Action
+                    </button>
+                </fieldset>
+
+
+                <div class="flex justify-end space-x-4">
+                    <button type="submit" class="bg-blue-600 hover:bg-blue-700 text-white font-bold py-3 px-8 rounded-lg transition duration-150">
+                        <svg class="w-5 h-5 mr-2 inline-block" fill="none" stroke="currentColor" viewBox="0 0 24 24" xmlns="http://www.w3.org/2000/svg"><path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M5 13l4 4L19 7"></path></svg>
+                        Check-in Vehicle & Create Job Card
+                    </button>
+                </div>
+            </form>
+        </section>
+        <section id="general-service" class="space-y-8" style="display:none;">
+            </section>
+        
+        <section id="clients-section" class="space-y-8" style="display:none;">
+            </section>
+
+        <section id="car-list" class="space-y-8" style="display:none;">
+            </section>
+
+        <section id="completed-list" class="space-y-8" style="display:none;">
+            </section>
+        
+        <section id="reports-section" class="space-y-8" style="display:none;">
+            <h2 class="text-3xl font-bold text-gray-800 border-b pb-2">📊 Comprehensive Reports Center</h2>
+            
+            <div class="grid grid-cols-1 md:grid-cols-2 gap-6">
+                <div class="bg-white p-6 rounded-xl shadow-lg">
+                    <h3 class="text-xl font-semibold mb-3 text-blue-700">Daily Service Report</h3>
+                    <p class="mb-4 text-gray-600">Generate a summary of all cars checked-in and out today.</p>
+                    <button onclick="generateDailyReport()" class="bg-blue-600 hover:bg-blue-700 text-white font-bold py-2 px-4 rounded transition duration-150">Generate Daily Report</button>
+                </div>
+
+                <div class="bg-white p-6 rounded-xl shadow-lg">
+                    <h3 class="text-xl font-semibold mb-3 text-blue-700">Monthly Performance Report</h3>
+                    <p class="mb-4 text-gray-600">Analyse service trends, top repairs, and client activity for the month.</p>
+                    <button onclick="generateMonthlyReport()" class="bg-blue-600 hover:bg-blue-700 text-white font-bold py-2 px-4 rounded transition duration-150">Generate Monthly Report</button>
+                </div>
+            </div>
+
+            <div class="bg-white p-6 rounded-xl shadow-lg mt-8">
+                <h3 class="text-xl font-semibold mb-4 text-gray-800 border-b pb-2">Saved Car Analysis Reports</h3>
+                <div class="mb-4 flex space-x-3">
+                    <input id="report-search-input" type="text" placeholder="Search by Plate, Client, or Report ID..." class="flex-grow p-3 border rounded-lg" oninput="filterSavedReports(this.value)"/>
+                    <button onclick="fetchSavedReports()" class="bg-green-600 hover:bg-green-700 text-white font-bold py-3 px-6 rounded-lg transition duration-150">Refresh List</button>
+                </div>
+                
+                <div id="saved-reports-list" class="space-y-3 custom-scrollbar h-80 overflow-y-auto">
+                    <p class="text-gray-500 text-center py-4">Reports will appear here once saved.</p>
+                </div>
+            </div>
+        </section>
+
+        <section id="mechanic-portal" class="space-y-8" style="display:none;">
+            <h2 class="text-3xl font-bold text-gray-800 border-b pb-2">👨‍🔧 Mechanic Job Portal</h2>
+
+            <div id="mechanic-login-form" class="bg-white p-8 rounded-xl shadow-2xl w-full max-w-md mx-auto">
+                <h3 class="text-2xl font-bold mb-6 text-center text-green-700">Mechanic Login</h3>
+                <input id="mechanic-pin-input" type="password" placeholder="Enter Your 4-Digit PIN" maxlength="4" class="w-full p-3 mb-4 border border-gray-300 rounded-lg text-center text-xl focus:ring-green-500 focus:border-green-500" />
+                <button onclick="mechanicLogin()" class="w-full bg-green-600 hover:bg-green-700 text-white font-bold py-3 rounded-lg transition duration-150">Login</button>
+                <p id="mechanic-auth-message" class="text-red-500 text-sm mt-3 text-center"></p>
+            </div>
+
+            <div id="mechanic-job-list" style="display:none;">
+                <h3 class="text-2xl font-semibold text-gray-700 mb-4">Assigned Jobs for: <span id="mechanic-name-display" class="text-green-600"></span></h3>
+                <div id="assigned-jobs-container" class="grid grid-cols-1 lg:grid-cols-2 xl:grid-cols-3 gap-6">
+                    <p class="text-gray-500 text-center col-span-full py-10">No jobs currently assigned.</p>
+                </div>
+
+                <h3 class="text-2xl font-semibold text-gray-700 mt-8 mb-4">Active Project Cars</h3>
+                <div id="mechanic-project-cars-container" class="grid grid-cols-1 lg:grid-cols-2 gap-6">
+                    <p class="text-gray-500 text-center col-span-full py-10">No active projects assigned.</p>
+                </div>
+            </div>
+        </section>
+
+        <section id="finance-portal" class="space-y-8" style="display:none;">
+            <h2 class="text-3xl font-bold text-gray-800 border-b pb-2">💰 Finance & Accounting Manager</h2>
+            
+            <div id="finance-dashboard" class="grid grid-cols-1 md:grid-cols-3 gap-6">
+                <div class="bg-white p-6 rounded-xl shadow-lg border-l-4 border-green-500">
+                    <p class="text-sm font-medium text-gray-500">Total Income (YTD)</p>
+                    <p id="ytd-income" class="text-3xl font-bold text-green-700 mt-1">...</p>
+                </div>
+                <div class="bg-white p-6 rounded-xl shadow-lg border-l-4 border-red-500">
+                    <p class="text-sm font-medium text-gray-500">Total Expenses (YTD)</p>
+                    <p id="ytd-expenses" class="text-3xl font-bold text-red-700 mt-1">...</p>
+                </div>
+                <div class="bg-white p-6 rounded-xl shadow-lg border-l-4 border-purple-500">
+                    <p class="text-sm font-medium text-gray-500">Net Profit (YTD)</p>
+                    <p id="ytd-profit" class="text-3xl font-bold text-purple-700 mt-1">...</p>
+                </div>
+            </div>
+
+            <div class="bg-white p-6 rounded-xl shadow-lg">
+                <h3 class="text-xl font-semibold mb-4 text-gray-800 border-b pb-2">Invoices & Payments</h3>
+                <table class="min-w-full divide-y divide-gray-200 text-sm">
+                    <thead>
+                        <tr>
+                            <th class="px-6 py-3 bg-gray-50 text-left text-xs font-medium text-gray-500 uppercase tracking-wider">Invoice ID</th>
+                            <th class="px-6 py-3 bg-gray-50 text-left text-xs font-medium text-gray-500 uppercase tracking-wider">Client/Vehicle</th>
+                            <th class="px-6 py-3 bg-gray-50 text-left text-xs font-medium text-gray-500 uppercase tracking-wider">Amount</th>
+                            <th class="px-6 py-3 bg-gray-50 text-left text-xs font-medium text-gray-500 uppercase tracking-wider">Status</th>
+                            <th class="px-6 py-3 bg-gray-50 text-left text-xs font-medium text-gray-500 uppercase tracking-wider">Actions</th>
+                        </tr>
+                    </thead>
+                    <tbody id="invoices-table-body" class="bg-white divide-y divide-gray-200">
+                        </tbody>
+                </table>
+            </div>
+
+            <div class="bg-white p-6 rounded-xl shadow-lg">
+                <h3 class="text-xl font-semibold mb-4 text-gray-800 border-b pb-2">Supplier Payments & Overheads</h3>
+                <button onclick="openExpenseModal('supplier')" class="bg-yellow-500 hover:bg-yellow-600 text-white font-bold py-2 px-4 rounded transition duration-150 mr-2">Log Supplier Payment</button>
+                <button onclick="openExpenseModal('overhead')" class="bg-yellow-500 hover:bg-yellow-600 text-white font-bold py-2 px-4 rounded transition duration-150 mr-2">Log Overhead/Salary</button>
+            </div>
+        </section>
+
+        <section id="parts-inventory" class="space-y-8" style="display:none;">
+            <h2 class="text-3xl font-bold text-gray-800 border-b pb-2">🔩 Parts Inventory Management</h2>
+            
+            <div class="flex justify-between items-center mb-4">
+                <input id="part-search" type="text" placeholder="Search by Part Name or SKU..." class="flex-grow p-3 border rounded-lg max-w-sm" oninput="filterParts(this.value)"/>
+                <button onclick="openPartModal()" class="bg-blue-600 hover:bg-blue-700 text-white font-bold py-3 px-6 rounded-lg transition duration-150">
+                    <svg class="w-5 h-5 mr-2 inline-block" fill="none" stroke="currentColor" viewBox="0 0 24 24" xmlns="http://www.w3.org/2000/svg"><path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M12 4v16m8-8H4"></path></svg>
+                    Add New Part
+                </button>
+            </div>
+
+            <div class="bg-white p-6 rounded-xl shadow-lg">
+                <h3 class="text-xl font-semibold mb-4 text-gray-800 border-b pb-2">Current Stock Levels</h3>
+                <div id="inventory-list" class="space-y-4">
+                    <p class="text-gray-500 text-center py-4">Loading inventory...</p>
+                </div>
+            </div>
+
+            <div id="suppliers-section" class="bg-white p-6 rounded-xl shadow-lg mt-8">
+                <h3 class="text-xl font-semibold mb-4 text-gray-800 border-b pb-2">🤝 Supplier Contacts</h3>
+                <button onclick="openSupplierModal()" class="bg-green-600 hover:bg-green-700 text-white font-bold py-2 px-4 rounded transition duration-150 mb-4">Add New Supplier</button>
+                <div id="suppliers-list" class="space-y-3">
+                    <p class="text-gray-500">No suppliers saved.</p>
+                </div>
+            </div>
+        </section>
+
+        <section id="project-cars" class="space-y-8" style="display:none;">
+            <h2 class="text-3xl font-bold text-gray-800 border-b pb-2">🏗️ Project Car Management</h2>
+            
+            <button onclick="openProjectCarModal()" class="bg-orange-600 hover:bg-orange-700 text-white font-bold py-3 px-6 rounded-lg transition duration-150">
+                <svg class="w-5 h-5 mr-2 inline-block" fill="none" stroke="currentColor" viewBox="0 0 24 24" xmlns="http://www.w3.org/2000/svg"><path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M12 4v16m8-8H4"></path></svg>
+                Log New Project Car
+            </button>
+
+            <div id="project-car-list" class="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 gap-6">
+                <p class="text-gray-500 text-center col-span-full py-10">No long-term projects currently logged.</p>
+            </div>
+        </section>
+
+
+        <div id="quoteModal" class="modal">
+            <div class="modal-content w-full max-w-4xl p-6">
+                <h3 class="text-2xl font-bold mb-4 text-blue-700">Service Quote Generation</h3>
+                <p class="text-red-500 mb-4" id="quote-auth-message">Enter security key to access quote generation.</p>
+                <input type="password" id="quote-security-key" placeholder="Security Key" class="p-3 border rounded-lg mb-4 w-full max-w-xs" />
+                <button onclick="verifyQuoteKey()" class="bg-blue-500 hover:bg-blue-600 text-white font-bold py-2 px-4 rounded-lg transition duration-150">Verify Key</button>
+                
+                <div id="quote-content" style="display:none;">
+                    <h4 class="text-xl font-semibold mb-2 mt-4">Quote for: <span id="quote-vehicle-details" class="text-blue-600"></span></h4>
+                    <table class="min-w-full divide-y divide-gray-200 text-sm">
+                        <thead>
+                            <tr>
+                                <th class="px-6 py-3 bg-gray-50 text-left text-xs font-medium text-gray-500 uppercase tracking-wider">Item/Description</th>
+                                <th class="px-6 py-3 bg-gray-50 text-left text-xs font-medium text-gray-500 uppercase tracking-wider">Qty</th>
+                                <th class="px-6 py-3 bg-gray-50 text-left text-xs font-medium text-gray-500 uppercase tracking-wider">Unit Price (KES)</th>
+                                <th class="px-6 py-3 bg-gray-50 text-left text-xs font-medium text-gray-500 uppercase tracking-wider">Total (KES)</th>
+                                <th class="px-6 py-3 bg-gray-50"></th>
+                            </tr>
+                        </thead>
+                        <tbody id="quote-items-body" class="bg-white divide-y divide-gray-200">
+                            </tbody>
+                    </table>
+                    <button onclick="addQuoteItem()" class="mt-4 bg-green-500 hover:bg-green-600 text-white font-bold py-2 px-4 rounded-lg">Add Item</button>
+
+                    <div class="mt-6 text-right space-y-2">
+                        <p>Subtotal: <span id="quote-subtotal" class="font-bold">0.00 KES</span></p>
+                        <p>Tax (16%): <span id="quote-tax" class="font-bold">0.00 KES</span></p>
+                        <p class="text-xl font-extrabold text-blue-800">TOTAL: <span id="quote-total">0.00 KES</span></p>
+                    </div>
+
+                    <div class="flex justify-end space-x-4 mt-6">
+                        <button onclick="saveQuote()" class="bg-yellow-500 hover:bg-yellow-600 text-white font-bold py-2 px-4 rounded-lg">Save Quote</button>
+                        <button onclick="generateQuotePDF()" class="bg-red-600 hover:bg-red-700 text-white font-bold py-2 px-4 rounded-lg">Download PDF</button>
+                        <button onclick="sendQuoteViaWhatsApp()" class="bg-green-500 hover:bg-green-600 text-white font-bold py-2 px-4 rounded-lg">Send via WhatsApp</button>
+                        <button onclick="closeQuoteModal()" class="bg-gray-500 hover:bg-gray-600 text-white font-bold py-2 px-4 rounded-lg">Close</button>
+                    </div>
+                </div>
+            </div>
+        </div>
+
+        <div id="invoiceModal" class="modal">
+            <div class="modal-content w-full max-w-4xl p-6">
+                <h3 class="text-2xl font-bold mb-4 text-purple-700">Invoice Generation</h3>
+                <h4 class="text-xl font-semibold mb-4">Invoice for: <span id="invoice-vehicle-details" class="text-purple-600"></span></h4>
+                
+                <table class="min-w-full divide-y divide-gray-200 text-sm mb-4">
+                    </table>
+
+                <div class="mt-6 text-right space-y-2">
+                    <p>Total Due: <span id="invoice-total" class="font-extrabold text-2xl text-purple-800">0.00 KES</span></p>
+                </div>
+
+                <div class="flex justify-end space-x-4 mt-6">
+                    <button onclick="logInvoice('paid')" class="bg-green-600 hover:bg-green-700 text-white font-bold py-3 px-6 rounded-lg">
+                        <svg class="w-5 h-5 mr-2 inline-block" fill="none" stroke="currentColor" viewBox="0 0 24 24" xmlns="http://www.w3.org/2000/svg"><path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M9 12l2 2 4-4m6 2a9 9 0 11-18 0 9 9 0 0118 0z"></path></svg>
+                        Mark as Paid (Log Income)
+                    </button>
+                    <button onclick="logInvoice('pending')" class="bg-yellow-600 hover:bg-yellow-700 text-white font-bold py-3 px-6 rounded-lg">
+                        <svg class="w-5 h-5 mr-2 inline-block" fill="none" stroke="currentColor" viewBox="0 0 24 24" xmlns="http://www.w3.org/2000/svg"><path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M12 8v4l3 3m6-3a9 9 0 11-18 0 9 9 0 0118 0z"></path></svg>
+                        Mark as Pending (Save Invoice)
+                    </button>
+                    <button onclick="closeInvoiceModal()" class="bg-gray-500 hover:bg-gray-600 text-white font-bold py-3 px-6 rounded-lg">Close</button>
+                </div>
+            </div>
+        </div>
+        
+        <div id="jobCardModal" class="modal">
+            <div class="flex justify-end space-x-4 mt-4">
+                <button onclick="openQuoteModal(currentJobCardData)" class="bg-blue-600 hover:bg-blue-700 text-white font-bold py-2 px-4 rounded-lg transition duration-150">
+                    Generate Quote
+                </button>
+                <button onclick="openInvoiceModal(currentJobCardData)" class="bg-purple-600 hover:bg-purple-700 text-white font-bold py-2 px-4 rounded-lg transition duration-150">
+                    Generate Invoice
+                </button>
+                </div>
+        </div>
+
+    </main>
+    
+    <footer class="bg-gray-800 text-white text-center py-4 mt-8">
+        <p>&copy; 2025 Garage Manager PRO | Powered by Firebase</p>
+    </footer>
+
+    <script type="module">
+        // ======================================================================
+        // START: FIREBASE CONFIGURATION UPDATE
+        // ======================================================================
+        // Import all necessary Firebase functions (Auth, Firestore, Analytics)
+        import { initializeApp } from "https://www.gstatic.com/firebasejs/12.6.0/firebase-app.js";
+        import { getAnalytics } from "https://www.gstatic.com/firebasejs/12.6.0/firebase-analytics.js";
+        import { getAuth, onAuthStateChanged, signInWithEmailAndPassword, createUserWithEmailAndPassword, signOut } from "https://www.gstatic.com/firebasejs/12.6.0/firebase-auth.js";
+        import { getFirestore, collection, addDoc, getDocs, onSnapshot, query, orderBy, doc, getDoc, updateDoc, deleteDoc, where, serverTimestamp } from "https://www.gstatic.com/firebasejs/12.6.0/firebase-firestore.js";
+
+        // Your NEW web app's Firebase configuration
+        const firebaseConfig = {
+            apiKey: "AIzaSyBCmp39o3riQacUUPDqPTc8i53HRQag83U",
+            authDomain: "approvals-app-ec05c.firebaseapp.com",
+            projectId: "approvals-app-ec05c",
+            storageBucket: "approvals-app-ec05c.firebasestorage.app",
+            messagingSenderId: "615566254550",
+            appId: "1:615566254550:web:321f6e1559631176080477",
+            measurementId: "G-83QG8E40FV"
+        };
+
+        // Initialize Firebase
+        const app = initializeApp(firebaseConfig);
+        const analytics = getAnalytics(app);
+        const auth = getAuth(app);
+        const db = getFirestore(app);
+        // ======================================================================
+        // END: FIREBASE CONFIGURATION UPDATE
+        // ======================================================================
+
+        // Import the error codes dictionary
+        // Note: You must ensure this file is accessible in the same directory or adjust the path.
+        // import { ERROR_CODE_LOOKUP } from './error_codes_dictionary.js'; 
+
+        // --- GLOBAL STATE & COLLECTIONS ---
+        let authUser = null;
+        let clientCache = [];
+        let partsInventoryCache = [];
+        let suppliersCache = [];
+        let savedQuotesCache = [];
+        let savedInvoicesCache = [];
+        let savedReportsCache = [];
+        let currentJobCardData = {}; // To hold data for the open job card
+        const COLLECTIONS = {
+            CARS: "cars",
+            CLIENTS: "clients",
+            COMPLETED_CARS: "completed_cars",
+            GENERAL_SERVICE: "general_service_jobs",
+            QUOTES: "quotes",
+            INVOICES: "invoices",
+            FINANCE: "finance_records",
+            PARTS_INVENTORY: "parts_inventory",
+            SUPPLIERS: "suppliers",
+            PROJECT_CARS: "project_cars",
+            SAVED_REPORTS: "saved_reports",
+            USERS: "users", // New collection for roles/mechanic pins
+        };
+        const ADMIN_SECURITY_KEY = "ADMIN12345"; // Mock key for quote access
+
+        // --- CORE APPLICATION FUNCTIONS (EXISTING) ---
+        // ... (Existing functions like showSection, handleLoginSignup, etc. are assumed to be here) ...
+
+        // --- NEW FEATURE FUNCTIONS (1-8) ---
+
+        // =======================================================================
+        // 1 & 2. QUOTE & INVOICE GENERATION LOGIC
+        // =======================================================================
+
+        function openQuoteModal(carData) {
+            currentJobCardData = carData;
+            document.getElementById('quote-auth-message').style.display = 'block';
+            document.getElementById('quote-content').style.display = 'none';
+            document.getElementById('quoteModal').style.display = 'flex';
+            document.getElementById('quote-vehicle-details').textContent = `${carData.numberPlate} (${carData.make} ${carData.model})`;
+            // Clear and add initial item for demonstration
+            document.getElementById('quote-items-body').innerHTML = '';
+            addQuoteItem('Labor Charge', 1, 3000);
+            addQuoteItem('Oil Filter', 1, 850);
+            calculateQuoteTotals();
+        }
+        
+        function verifyQuoteKey() {
+            const key = document.getElementById('quote-security-key').value;
+            if (key === ADMIN_SECURITY_KEY) {
+                document.getElementById('quote-auth-message').style.display = 'none';
+                document.getElementById('quote-content').style.display = 'block';
+                document.getElementById('quote-security-key').value = '';
+            } else {
+                alert("Invalid security key.");
+            }
+        }
+        
+        function addQuoteItem(desc = '', qty = 1, price = 0) {
+            const body = document.getElementById('quote-items-body');
+            const row = body.insertRow();
+            row.innerHTML = `
+                <td class="px-6 py-4 whitespace-nowrap"><input type="text" value="${desc}" class="quote-item-desc w-full p-1 border rounded" /></td>
+                <td class="px-6 py-4 whitespace-nowrap"><input type="number" value="${qty}" min="1" oninput="calculateQuoteTotals()" class="quote-item-qty w-16 p-1 border rounded text-center" /></td>
+                <td class="px-6 py-4 whitespace-nowrap"><input type="number" value="${price}" min="0" oninput="calculateQuoteTotals()" class="quote-item-price w-24 p-1 border rounded text-right" /></td>
+                <td class="px-6 py-4 whitespace-nowrap text-right quote-item-total">${(qty * price).toFixed(2)} KES</td>
+                <td class="px-6 py-4 whitespace-nowrap"><button onclick="this.closest('tr').remove(); calculateQuoteTotals()" class="text-red-600 hover:text-red-900">Del</button></td>
+            `;
+        }
+
+        function calculateQuoteTotals() {
+            const rows = document.getElementById('quote-items-body').rows;
+            let subtotal = 0;
+            for (let i = 0; i < rows.length; i++) {
+                const row = rows[i];
+                const qty = parseFloat(row.querySelector('.quote-item-qty').value) || 0;
+                const price = parseFloat(row.querySelector('.quote-item-price').value) || 0;
+                const total = qty * price;
+                row.querySelector('.quote-item-total').textContent = total.toFixed(2) + ' KES';
+                subtotal += total;
+            }
+            const taxRate = 0.16; 
+            const tax = subtotal * taxRate;
+            const total = subtotal + tax;
+
+            document.getElementById('quote-subtotal').textContent = subtotal.toFixed(2) + ' KES';
+            document.getElementById('quote-tax').textContent = tax.toFixed(2) + ' KES';
+            document.getElementById('quote-total').textContent = total.toFixed(2) + ' KES';
+        }
+
+        async function saveQuote() {
+            if (!currentJobCardData.id) return alert("Error: No job selected.");
+            // Logic to collect all quote items, subtotal, tax, total
+            // ...
+            const quoteData = {
+                jobId: currentJobCardData.id,
+                vehicle: currentJobCardData.numberPlate,
+                client: currentJobCardData.clientName,
+                total: parseFloat(document.getElementById('quote-total').textContent),
+                status: 'Generated',
+                createdAt: serverTimestamp(),
+                // ... other quote data
+            };
+            try {
+                const docRef = await addDoc(collection(db, COLLECTIONS.QUOTES), quoteData);
+                alert(`Quote saved successfully with ID: ${docRef.id}`);
+            } catch (error) {
+                console.error("Error saving quote: ", error);
+                alert("Failed to save quote.");
+            }
+        }
+        
+        function generateQuotePDF() {
+            alert("Generating Quote PDF (Requires full jsPDF implementation).");
+            // Full implementation of PDF generation for the quote document goes here
+        }
+
+        function sendQuoteViaWhatsApp() {
+            alert("Sending quote via WhatsApp (Requires final URL generation and client phone number).");
+            // WhatsApp link generation using the quote details
+        }
+        
+        function closeQuoteModal() {
+            document.getElementById('quoteModal').style.display = 'none';
+        }
+
+        // --- Invoice Functions (Simplified stubs) ---
+        function openInvoiceModal(carData) {
+            currentJobCardData = carData;
+            document.getElementById('invoiceModal').style.display = 'flex';
+            document.getElementById('invoice-vehicle-details').textContent = `${carData.numberPlate} (${carData.make} ${carData.model})`;
+            // Assume total is finalized from a completed job or quote
+            const mockTotal = 8500.50; 
+            document.getElementById('invoice-total').textContent = mockTotal.toFixed(2) + ' KES';
+        }
+
+        async function logInvoice(status) {
+            if (!currentJobCardData.id) return alert("Error: No job selected.");
+            const totalAmount = parseFloat(document.getElementById('invoice-total').textContent);
+            
+            const invoiceData = {
+                jobId: currentJobCardData.id,
+                vehicle: currentJobCardData.numberPlate,
+                client: currentJobCardData.clientName,
+                amount: totalAmount,
+                status: status === 'paid' ? 'Paid' : 'Pending',
+                invoiceDate: serverTimestamp(),
+            };
+
+            try {
+                // Save the Invoice
+                const invoiceRef = await addDoc(collection(db, COLLECTIONS.INVOICES), invoiceData);
+                
+                // If Paid, log as income in the finance system
+                if (status === 'paid') {
+                    await addDoc(collection(db, COLLECTIONS.FINANCE), {
+                        type: 'income',
+                        source: `Invoice ${invoiceRef.id} - ${currentJobCardData.numberPlate}`,
+                        amount: totalAmount,
+                        date: serverTimestamp(),
+                        recordedBy: authUser.email,
+                    });
+                    alert(`Invoice ${invoiceRef.id} logged as PAID. Income recorded in Finance Portal.`);
+                    // Also, mark car as completed/delivered
+                    // await updateDoc(doc(db, COLLECTIONS.CARS, currentJobCardData.id), { status: 'Delivered', paymentStatus: 'Paid' });
+                } else {
+                    alert(`Invoice ${invoiceRef.id} saved as PENDING. Check Finance Portal.`);
+                    // await updateDoc(doc(db, COLLECTIONS.CARS, currentJobCardData.id), { paymentStatus: 'Pending' });
+                }
+                closeInvoiceModal();
+            } catch (error) {
+                console.error("Error logging invoice: ", error);
+                alert("Failed to log invoice/payment.");
+            }
+        }
+        
+        function closeInvoiceModal() {
+            document.getElementById('invoiceModal').style.display = 'none';
+        }
+
+        // =======================================================================
+        // 3. REPORTS ENHANCEMENT (Saved Car Reports)
+        // =======================================================================
+
+        function fetchSavedReports() {
+            // Function to fetch from COLLECTIONS.SAVED_REPORTS and populate the list
+            const container = document.getElementById('saved-reports-list');
+            container.innerHTML = `<p class="text-gray-500 text-center py-4">Loading reports...</p>`;
+            
+            // Mock data for demonstration
+            const mockReports = [
+                { id: 'RPT001', plate: 'KBC 123A', client: 'John Doe', type: 'Detailed Analysis', date: '2025-11-20' },
+                { id: 'RPT002', plate: 'KBB 456B', client: 'Jane Smith', type: 'Pre-Purchase Inspection', date: '2025-11-21' },
+            ];
+
+            container.innerHTML = mockReports.map(report => `
+                <div class="p-4 bg-gray-50 border rounded-lg flex justify-between items-center hover:bg-gray-100 transition duration-100">
+                    <div>
+                        <p class="font-bold text-gray-800">${report.id} - ${report.plate}</p>
+                        <p class="text-sm text-gray-600">${report.client} | Type: ${report.type} | Date: ${report.date}</p>
+                    </div>
+                    <div class="space-x-2">
+                        <button onclick="viewReport('${report.id}')" class="text-blue-600 hover:text-blue-800 font-medium">View</button>
+                        <button onclick="deleteReport('${report.id}')" class="text-red-600 hover:text-red-800 font-medium">Delete</button>
+                    </div>
+                </div>
+            `).join('');
+        }
+
+        function filterSavedReports(query) {
+            // Logic to filter the saved-reports-list based on the query
+            // ...
+        }
+
+        function viewReport(reportId) {
+            alert(`Opening detailed report view for: ${reportId}`);
+            // Logic to fetch the report from Firestore and display it
+        }
+
+        async function deleteReport(reportId) {
+            if (confirm(`Are you sure you want to delete report ${reportId}? This cannot be undone.`)) {
+                try {
+                    // await deleteDoc(doc(db, COLLECTIONS.SAVED_REPORTS, reportId));
+                    alert(`Report ${reportId} deleted successfully.`);
+                    fetchSavedReports(); // Refresh the list
+                } catch (error) {
+                    console.error("Error deleting report: ", error);
+                    alert("Failed to delete report.");
+                }
+            }
+        }
+
+        // =======================================================================
+        // 4. MECHANIC PORTAL LOGIC
+        // =======================================================================
+
+        const MECHANIC_PINS = {
+            "1234": "John Doe (Mock)", // Example Pin for a mechanic
+            "5678": "Jane Smith (Mock)"
+        };
+
+        function mechanicLogin() {
+            const pin = document.getElementById('mechanic-pin-input').value;
+            const messageEl = document.getElementById('mechanic-auth-message');
+            
+            if (MECHANIC_PINS[pin]) {
+                const mechanicName = MECHANIC_PINS[pin];
+                messageEl.textContent = 'Login successful!';
+                messageEl.className = 'text-green-500 text-sm mt-3 text-center';
+                document.getElementById('mechanic-login-form').style.display = 'none';
+                document.getElementById('mechanic-job-list').style.display = 'block';
+                document.getElementById('mechanic-name-display').textContent = mechanicName;
+                fetchAssignedJobs(mechanicName);
+            } else {
+                messageEl.textContent = 'Invalid PIN.';
+                messageEl.className = 'text-red-500 text-sm mt-3 text-center';
+            }
+        }
+
+        function fetchAssignedJobs(mechanicName) {
+            const container = document.getElementById('assigned-jobs-container');
+            container.innerHTML = `<p class="text-gray-500 text-center col-span-full py-10">Fetching assigned jobs...</p>`;
+
+            // In a real implementation, you would use a Firestore query here:
+            // const q = query(collection(db, COLLECTIONS.CARS), where("assignedMechanic", "==", mechanicName));
+            // onSnapshot(q, (snapshot) => { ... render job cards ... });
+
+            // Mocking a single assigned job
+            const mockJob = {
+                id: 'JOB101', plate: 'KAB 001Z', make: 'Toyota', model: 'Vitz', clientName: 'Mock Client',
+                reportedProblems: 'Engine misfire on startup, check engine light on.',
+                repairPlan: '1. Diagnose misfire (Coils/Plugs). 2. Replace faulty components. 3. Clear codes.',
+                status: 'In Progress'
+            };
+            
+            container.innerHTML = `
+                <div class="bg-white p-6 rounded-xl shadow-lg border-l-4 border-yellow-500">
+                    <p class="text-lg font-bold text-gray-800">${mockJob.plate} - ${mockJob.make} ${mockJob.model}</p>
+                    <p class="text-sm text-gray-600 mb-2">Client: ${mockJob.clientName}</p>
+                    <p class="font-semibold mt-3">Problems:</p>
+                    <p class="text-sm text-red-500">${mockJob.reportedProblems}</p>
+                    <p class="font-semibold mt-3">Repair Plan:</p>
+                    <textarea class="w-full p-2 border rounded mt-1 text-sm" rows="3">${mockJob.repairPlan}</textarea>
+                    <p class="mt-3 font-bold">Status: <span class="text-yellow-600">${mockJob.status}</span></p>
+                    <div class="mt-4 flex space-x-2">
+                        <button onclick="updateJobStatus('${mockJob.id}', 'Completed')" class="bg-green-600 hover:bg-green-700 text-white font-bold py-1 px-3 rounded-lg text-sm">Mark as Complete</button>
+                        <button onclick="openDetailedReport('${mockJob.id}')" class="bg-blue-600 hover:bg-blue-700 text-white font-bold py-1 px-3 rounded-lg text-sm">View Job Card</button>
+                    </div>
+                </div>
+            `;
+            
+            // Also fetch and display project cars assigned to this mechanic
+            fetchMechanicProjectCars(mechanicName);
+        }
+
+        async function updateJobStatus(carId, newStatus) {
+            try {
+                // await updateDoc(doc(db, COLLECTIONS.CARS, carId), { status: newStatus, lastUpdatedBy: document.getElementById('mechanic-name-display').textContent });
+                alert(`Job ${carId} updated to status: ${newStatus}`);
+                fetchAssignedJobs(document.getElementById('mechanic-name-display').textContent);
+            } catch (error) {
+                console.error("Error updating job status: ", error);
+                alert("Failed to update job status.");
+            }
+        }
+        
+        // =======================================================================
+        // 5. FINANCE MANAGER LOGIC
+        // =======================================================================
+
+        function fetchFinanceDashboard() {
+            // In a real app, this would query COLLECTIONS.FINANCE to calculate metrics
+            document.getElementById('ytd-income').textContent = 'KES 1,500,000.00';
+            document.getElementById('ytd-expenses').textContent = 'KES 800,000.00';
+            document.getElementById('ytd-profit').textContent = 'KES 700,000.00';
+            fetchInvoicesTable();
+        }
+
+        function fetchInvoicesTable() {
+            const tableBody = document.getElementById('invoices-table-body');
+            // Mock data from COLLECTIONS.INVOICES
+            const mockInvoices = [
+                { id: 'INV001', plate: 'KCD 789D', client: 'Sam K.', amount: 12500, status: 'Paid' },
+                { id: 'INV002', plate: 'KAF 002X', client: 'Aisha M.', amount: 9800, status: 'Pending' },
+            ];
+
+            tableBody.innerHTML = mockInvoices.map(inv => `
+                <tr>
+                    <td class="px-6 py-4 whitespace-nowrap">${inv.id}</td>
+                    <td class="px-6 py-4 whitespace-nowrap">${inv.client} / ${inv.plate}</td>
+                    <td class="px-6 py-4 whitespace-nowrap">KES ${inv.amount.toFixed(2)}</td>
+                    <td class="px-6 py-4 whitespace-nowrap">
+                        <span class="px-2 inline-flex text-xs leading-5 font-semibold rounded-full ${inv.status === 'Paid' ? 'bg-green-100 text-green-800' : 'bg-yellow-100 text-yellow-800'}">
+                            ${inv.status}
+                        </span>
+                    </td>
+                    <td class="px-6 py-4 whitespace-nowrap text-sm font-medium">
+                        ${inv.status === 'Pending' ? `<button onclick="updateInvoiceStatus('${inv.id}', 'Paid')" class="text-green-600 hover:text-green-900 mr-2">Mark Paid</button>` : ''}
+                        <button onclick="viewInvoice('${inv.id}')" class="text-blue-600 hover:text-blue-900">View</button>
+                    </td>
+                </tr>
+            `).join('');
+        }
+
+        async function updateInvoiceStatus(invoiceId, newStatus) {
+            // Logic to update invoice status and log income if changing to 'Paid'
+            alert(`Invoice ${invoiceId} marked as ${newStatus}. Finance record update needed.`);
+            // await updateDoc(doc(db, COLLECTIONS.INVOICES, invoiceId), { status: newStatus });
+            fetchInvoicesTable();
+        }
+
+        function openExpenseModal(type) {
+            const amount = prompt(`Enter amount for ${type} expense:`);
+            if (amount) {
+                const description = prompt(`Enter description for ${type} expense:`);
+                if (description) {
+                    logExpense(type, parseFloat(amount), description);
+                }
+            }
+        }
+
+        async function logExpense(type, amount, description) {
+            if (isNaN(amount) || amount <= 0) return alert("Invalid amount.");
+
+            const expenseData = {
+                type: type === 'supplier' ? 'supplier_payment' : 'overhead',
+                description: description,
+                amount: amount * -1, // Negative for expense
+                date: serverTimestamp(),
+                recordedBy: authUser.email,
+            };
+
+            try {
+                // await addDoc(collection(db, COLLECTIONS.FINANCE), expenseData);
+                alert(`KES ${amount.toFixed(2)} logged as ${type} expense.`);
+                fetchFinanceDashboard();
+            } catch (error) {
+                console.error("Error logging expense: ", error);
+                alert("Failed to log expense.");
+            }
+        }
+
+
+        // =======================================================================
+        // 6 & 7. PARTS INVENTORY & SUPPLIERS LOGIC
+        // =======================================================================
+
+        function fetchInventoryAndSuppliers() {
+            // Logic to fetch data from COLLECTIONS.PARTS_INVENTORY and COLLECTIONS.SUPPLIERS
+            const inventoryContainer = document.getElementById('inventory-list');
+            inventoryContainer.innerHTML = `<p class="text-gray-500 text-center py-4">Loading inventory...</p>`;
+
+            // Mock Data
+            partsInventoryCache = [
+                { id: 'SKU001', name: 'Oil Filter (Toyota)', quantity: 5, minStock: 3, price: 850, supplierId: 'SUP01' },
+                { id: 'SKU002', name: 'Brake Pads (Front)', quantity: 1, minStock: 5, price: 3500, supplierId: 'SUP02' },
+            ];
+            suppliersCache = [
+                { id: 'SUP01', name: 'Mega Parts Ltd', phone: '+254712345678' },
+                { id: 'SUP02', name: 'Brakes Co.', phone: '+254798765432' },
+            ];
+            
+            inventoryContainer.innerHTML = partsInventoryCache.map(part => {
+                const isLow = part.quantity <= part.minStock;
+                const supplier = suppliersCache.find(s => s.id === part.supplierId);
+                return `
+                    <div class="p-4 bg-white border rounded-lg shadow-sm ${isLow ? 'border-red-500 ring-2 ring-red-200' : 'border-gray-200'} flex justify-between items-center">
+                        <div>
+                            <p class="font-bold text-gray-800">${part.name} <span class="text-xs text-blue-500">(${part.id})</span></p>
+                            <p class="text-sm text-gray-600">Supplier: ${supplier ? supplier.name : 'N/A'}</p>
+                        </div>
+                        <div class="text-right">
+                            <p class="font-bold text-lg ${isLow ? 'text-red-600' : 'text-green-600'}">Stock: ${part.quantity}</p>
+                            <p class="text-xs text-gray-500">Min Stock: ${part.minStock}</p>
+                            ${isLow ? `<button onclick="placeOrder('${part.id}')" class="mt-1 bg-red-500 hover:bg-red-600 text-white text-xs py-1 px-2 rounded">Restock Order</button>` : ''}
+                        </div>
+                    </div>
+                `;
+            }).join('');
+            
+            renderSuppliersList();
+        }
+
+        function renderSuppliersList() {
+            const container = document.getElementById('suppliers-list');
+            container.innerHTML = suppliersCache.map(supplier => `
+                <div class="p-3 bg-gray-50 border rounded-lg flex justify-between items-center">
+                    <div>
+                        <p class="font-bold">${supplier.name}</p>
+                        <p class="text-sm text-gray-600">Phone: ${supplier.phone}</p>
+                    </div>
+                    <button onclick="sendSupplierWhatsApp('${supplier.id}', 'Inventory restock request: ...')" class="bg-green-500 hover:bg-green-600 text-white text-xs py-1 px-3 rounded">WhatsApp</button>
+                </div>
+            `).join('');
+        }
+
+        function openPartModal(part = null) {
+            // Modal for CRUD on inventory items
+            alert(`Opening modal to ${part ? 'Edit' : 'Add'} Part.`);
+        }
+
+        function openSupplierModal(supplier = null) {
+            // Modal for CRUD on supplier contacts
+            alert(`Opening modal to ${supplier ? 'Edit' : 'Add'} Supplier.`);
+        }
+
+        function placeOrder(partId) {
+            const part = partsInventoryCache.find(p => p.id === partId);
+            const supplier = suppliersCache.find(s => s.id === part.supplierId);
+            if (supplier) {
+                const message = `URGENT RESTOCK REQUEST:\nPart: ${part.name} (${part.id})\nQuantity Needed: ${part.minStock * 2}`;
+                sendSupplierWhatsApp(supplier.id, message);
+            } else {
+                alert(`No supplier found for ${part.name}.`);
+            }
+        }
+
+        function sendSupplierWhatsApp(supplierId, message) {
+            const supplier = suppliersCache.find(s => s.id === supplierId);
+            if (supplier && supplier.phone) {
+                const encodedMessage = encodeURIComponent(message);
+                window.open(`https://wa.me/${supplier.phone}?text=${encodedMessage}`, '_blank');
+            } else {
+                alert("Supplier phone number not available for WhatsApp order.");
+            }
+        }
+
+        // =======================================================================
+        // 8. PROJECT CAR MANAGEMENT LOGIC
+        // =======================================================================
+
+        function fetchProjectCars() {
+            // Logic to fetch from COLLECTIONS.PROJECT_CARS
+            const container = document.getElementById('project-car-list');
+            container.innerHTML = `<p class="text-gray-500 text-center col-span-full py-10">Loading project cars...</p>`;
+
+            // Mock Data
+            const mockProjects = [
+                { id: 'PRJ001', plate: 'KAZ 999E', make: 'VW', model: 'T1 Bus', milestone: 'Engine rebuild complete.', progress: 60, assignedMechanic: 'John Doe (Mock)' },
+                { id: 'PRJ002', plate: 'KAA 000P', make: 'Ford', model: 'Mustang 67', milestone: 'Body restoration pending parts arrival.', progress: 30, assignedMechanic: 'Jane Smith (Mock)' },
+            ];
+
+            container.innerHTML = mockProjects.map(project => `
+                <div class="bg-white p-6 rounded-xl shadow-lg border-l-4 border-orange-500">
+                    <div class="flex justify-between items-start">
+                        <p class="text-lg font-bold text-gray-800">${project.plate} - ${project.make} ${project.model}</p>
+                        <span class="text-xs font-semibold text-orange-600">${project.progress}% Complete</span>
+                    </div>
+                    <p class="text-sm text-gray-600 mb-2">Assigned: ${project.assignedMechanic}</p>
+                    <p class="font-semibold mt-3">Latest Milestone:</p>
+                    <p class="text-sm text-gray-700">${project.milestone}</p>
+                    
+                    <div class="w-full bg-gray-200 rounded-full h-2.5 mt-3">
+                        <div class="bg-orange-600 h-2.5 rounded-full" style="width: ${project.progress}%"></div>
+                    </div>
+                    <div class="mt-4 text-right">
+                        <button onclick="openProjectCarModal('${project.id}')" class="bg-orange-500 hover:bg-orange-600 text-white text-sm py-1 px-3 rounded-lg">Update Progress</button>
+                    </div>
+                </div>
+            `).join('');
+        }
+
+        function fetchMechanicProjectCars(mechanicName) {
+            // Filter project cars for the mechanic
+            const container = document.getElementById('mechanic-project-cars-container');
+            const assignedProjects = projectCarsCache.filter(p => p.assignedMechanic === mechanicName);
+
+            if (assignedProjects.length === 0) {
+                 container.innerHTML = `<p class="text-gray-500 text-center col-span-full py-10">No active projects assigned.</p>`;
+                 return;
+            }
+            
+            // Render the project car cards here...
+            container.innerHTML = assignedProjects.map(project => `
+                <div class="bg-white p-4 rounded-xl shadow-lg border-l-4 border-orange-500">
+                    </div>
+            `).join('');
+        }
+
+        function openProjectCarModal(projectId = null) {
+            // Modal for logging/updating project car details, plan, and progress
+            alert(`Opening modal to ${projectId ? 'Edit' : 'Add'} Project Car.`);
+        }
+
+
+        // --- APPLICATION INITIALIZATION AND EVENT HANDLERS (ENHANCED) ---
+
+        // (Existing onAuthStateChanged logic to show/hide sections is assumed to be here)
+
+        function attachNewNavHandlers() {
+            const navButtons = [
+                { id: 'nav-car-entry', section: 'car-entry' },
+                { id: 'nav-general-service', section: 'general-service' },
+                { id: 'nav-clients-list', section: 'clients-section' },
+                { id: 'nav-car-list', section: 'car-list' },
+                { id: 'nav-completed-list', section: 'completed-list' },
+                { id: 'nav-reports-section', section: 'reports-section', handler: fetchSavedReports }, // Added handler
+                // NEW NAVIGATION HANDLERS
+                { id: 'nav-mechanic-portal', section: 'mechanic-portal' },
+                { id: 'nav-finance-portal', section: 'finance-portal', handler: fetchFinanceDashboard },
+                { id: 'nav-parts-inventory', section: 'parts-inventory', handler: fetchInventoryAndSuppliers },
+                { id: 'nav-project-cars', section: 'project-cars', handler: fetchProjectCars },
+            ];
+
+            navButtons.forEach(({ id, section, handler }) => {
+                const button = document.getElementById(id);
+                if (button) {
+                    button.addEventListener('click', () => {
+                        showSection(section);
+                        if (handler) handler();
+                    });
+                }
+            });
+        }
+        
+        // Expose new functions globally
+        window.openQuoteModal = openQuoteModal;
+        window.verifyQuoteKey = verifyQuoteKey;
+        window.addQuoteItem = addQuoteItem;
+        window.calculateQuoteTotals = calculateQuoteTotals;
+        window.saveQuote = saveQuote;
+        window.generateQuotePDF = generateQuotePDF;
+        window.sendQuoteViaWhatsApp = sendQuoteViaWhatsApp;
+        window.closeQuoteModal = closeQuoteModal;
+
+        window.openInvoiceModal = openInvoiceModal;
+        window.logInvoice = logInvoice;
+        window.closeInvoiceModal = closeInvoiceModal;
+        
+        window.fetchSavedReports = fetchSavedReports;
+        window.filterSavedReports = filterSavedReports;
+        window.viewReport = viewReport;
+        window.deleteReport = deleteReport;
+
+        window.mechanicLogin = mechanicLogin;
+        window.updateJobStatus = updateJobStatus;
+        
+        window.fetchFinanceDashboard = fetchFinanceDashboard;
+        window.updateInvoiceStatus = updateInvoiceStatus;
+        window.openExpenseModal = openExpenseModal;
+        
+        window.openPartModal = openPartModal;
+        window.openSupplierModal = openSupplierModal;
+        window.placeOrder = placeOrder;
+        window.sendSupplierWhatsApp = sendSupplierWhatsApp;
+        window.filterParts = () => {}; // Stub for filter
+        
+        window.openProjectCarModal = openProjectCarModal;
+        
+        document.addEventListener('DOMContentLoaded', () => {
+            // ... (Existing DOMContentLoaded logic)
+            attachNewNavHandlers();
+            
+            // ... (Other existing initializations)
+            
+            // Initial render of existing sections
+            showSection('auth-section'); 
+            
+            // Initial call to fetch necessary data caches
+            fetchInventoryAndSuppliers(); // Fetch inventory/suppliers for initial cache
+            fetchProjectCars(); // Fetch project cars for initial cache
+        });
+
+    </script>
+
+</body>
+</html>
