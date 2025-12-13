@@ -355,25 +355,26 @@
 
     </main>
     
-    <script src="management.js"></script>
+   <script src="management.js"></script>
+    
     <script>
         // Global function for dynamic rows
         function addInvoiceItemRow() {
             const container = document.getElementById('invoice-items-container');
             const newRow = document.createElement('div');
-            // Using the new consistent class 'invoice-item-row'
+            // Ensure classes match those used in management.js save/calculate functions
             newRow.className = 'flex space-x-2 invoice-item-row mb-2 items-center';
             newRow.innerHTML = `
                 <input type="text" placeholder="Description" class="p-2 border rounded-lg w-1/2 invoice-item-desc" required/>
-                <input type="number" placeholder="Qty" class="p-2 border rounded-lg w-1/6 invoice-item-quantity" value="1" min="1" required/>
-                <input type="number" placeholder="Unit Price ($)" class="p-2 border rounded-lg w-1/4 invoice-item-amount" step="0.01" min="0" required/>
+                <input type="number" placeholder="Qty" class="p-2 border rounded-lg w-1/6 invoice-item-qty" value="1" min="1" required oninput="calculateTotal('invoice')"/>
+                <input type="number" placeholder="Unit Price ($)" class="p-2 border rounded-lg w-1/4 invoice-item-unit-price" step="0.01" min="0" required oninput="calculateTotal('invoice')"/>
+                <input type="text" placeholder="Total Amount ($)" value="0.00" class="invoice-item-amount form-input w-32 bg-gray-100" readonly>
                 <button type="button" onclick="this.parentElement.remove(); calculateTotal('invoice')" class="text-red-500 hover:text-red-700 p-1">
                     <i class="fas fa-trash-alt"></i>
                 </button>
             `;
             container.appendChild(newRow);
-            // Re-attach event listeners for total calculation
-            attachAmountListeners('invoice');
+            calculateTotal('invoice');
         }
 
         function addQuoteItemRow() {
@@ -382,23 +383,29 @@
             newRow.className = 'flex space-x-2 quote-item-row mb-2 items-center';
             newRow.innerHTML = `
                 <input type="text" placeholder="Description" class="p-2 border rounded-lg w-1/2 quote-item-desc" required/>
-                <input type="number" placeholder="Qty" class="p-2 border rounded-lg w-1/6 quote-item-quantity" value="1" min="1" required/>
-                <input type="number" placeholder="Est. Unit Cost ($)" class="p-2 border rounded-lg w-1/4 quote-item-amount" step="0.01" min="0" required/>
+                <input type="number" placeholder="Qty" class="p-2 border rounded-lg w-1/6 quote-item-qty" value="1" min="1" required oninput="calculateTotal('quote')"/>
+                <input type="number" placeholder="Est. Unit Cost ($)" class="p-2 border rounded-lg w-1/4 quote-item-unit-price" step="0.01" min="0" required oninput="calculateTotal('quote')"/>
+                <input type="text" placeholder="Total Amount ($)" value="0.00" class="quote-item-amount form-input w-32 bg-gray-100" readonly>
                 <button type="button" onclick="this.parentElement.remove(); calculateTotal('quote')" class="text-red-500 hover:text-red-700 p-1">
                     <i class="fas fa-trash-alt"></i>
                 </button>
             `;
             container.appendChild(newRow);
-            // Re-attach event listeners for total calculation
-            attachAmountListeners('quote');
+            calculateTotal('quote');
         }
         
         // Initial call to add the first item row on page load (since we cleared them in previous step)
         document.addEventListener('DOMContentLoaded', () => {
-            addInvoiceItemRow();
-            addQuoteItemRow();
+            // Check if containers exist before attempting to add rows
+            if (document.getElementById('invoice-items-container')) {
+                addInvoiceItemRow();
+            }
+            if (document.getElementById('quote-items-container')) {
+                addQuoteItemRow();
+            }
         });
 
     </script>
-    </body>
+
+</body>
 </html>
