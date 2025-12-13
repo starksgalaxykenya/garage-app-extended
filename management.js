@@ -874,14 +874,16 @@ invoiceCreationForm.addEventListener('submit', async (e) => {
     const items = [];
     document.querySelectorAll('#invoice-items-container .invoice-item-row').forEach(row => {
         // Use the explicit selectors defined in addInvoiceItemRow
-        const quantity = parseFloat(row.querySelector('.invoice-item-quantity').value) || 0;
-        const unitPrice = parseFloat(row.querySelector('.invoice-item-amount').value) || 0;
-      items.push({
-  
+        const quantity = parseFloat(row.querySelector('.invoice-item-qty').value) || 0; // FIX: Use .invoice-item-qty
+        const unitPrice = parseFloat(row.querySelector('.invoice-item-unit-price').value) || 0; // FIX: Use .invoice-item-unit-price
+        const lineTotal = quantity * unitPrice;
+
+        if (lineTotal > 0) {
+             items.push({
                 description: row.querySelector('.invoice-item-desc').value,
                 quantity: quantity, 
                 unitPrice: unitPrice, 
-                amount: quantity * unitPrice 
+                amount: lineTotal 
             });
         }
     });
@@ -1078,16 +1080,16 @@ quoteCreationForm.addEventListener('submit', async (e) => {
 
     const items = [];
     document.querySelectorAll('#quote-items-container .quote-item-row').forEach(row => {
-        // Use the explicit selectors defined in addQuoteItemRow
-        const quantity = parseFloat(row.querySelector('.quote-item-qty').value) || 0;
-        const unitPrice = parseFloat(row.querySelector('.quote-item-unit-price').value) || 0;
+        // FIX: Use the explicit selectors defined in addQuoteItemRow
+        const quantity = parseFloat(row.querySelector('.quote-item-qty').value) || 0; 
+        const unitPrice = parseFloat(row.querySelector('.quote-item-unit-price').value) || 0; 
         const lineTotal = quantity * unitPrice;
         
         if (lineTotal > 0) {
             items.push({
                 description: row.querySelector('.quote-item-desc').value,
-                quantity: quantity, 
-                unitPrice: unitPrice, 
+                quantity: quantity, // This is now correctly saved
+                unitPrice: unitPrice, // This is now correctly saved
                 amount: lineTotal 
             });
         }
@@ -1181,8 +1183,8 @@ async function generateQuotePDF(quoteId, clientPhone) {
         // Items Table
         const itemBody = quote.items.map(item => [
             item.description, 
-            item.quantity.toString(), // New column (FIXED: now has data)
-            `$${item.unitPrice.toFixed(2)}`, // New column
+            item.quantity.toString(), // This is now safe as 'quantity' is guaranteed to exist
+            `$${item.unitPrice.toFixed(2)}`, // This is now safe as 'unitPrice' is guaranteed to exist
             `$${item.amount.toFixed(2)}` // Line Total
         ]);
         
