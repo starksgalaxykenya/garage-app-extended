@@ -359,13 +359,15 @@
     
     <script>
         // Global function for dynamic rows
+       // Global functions for dynamic rows
         function addInvoiceItemRow() {
             const container = document.getElementById('invoice-items-container');
             const newRow = document.createElement('div');
             // Added 'mb-2' for vertical spacing between rows
             newRow.className = 'flex space-x-2 item-row mb-2';
             newRow.innerHTML = `
-                <input type="text" placeholder="Description" class="p-2 border rounded-lg w-6/12 item-desc" required/>
+                <input type="text" placeholder="Description" 
+                       class="p-2 border rounded-lg w-6/12 item-desc" required/>
                 
                 <input type="number" value="1" min="1" placeholder="Qty" 
                        class="p-2 border rounded-lg w-2/12 item-quantity text-center" 
@@ -383,7 +385,10 @@
             `;
             container.appendChild(newRow);
             // Re-attach event listeners for total calculation
-            attachAmountListeners('invoice');
+            // Note: If you still see 'attachAmountListeners is not defined', ensure management.js is loaded first.
+            if (typeof attachAmountListeners === 'function') {
+                attachAmountListeners('invoice');
+            }
         }
 
         function addQuoteItemRow() {
@@ -392,12 +397,13 @@
             // Added 'mb-2' for vertical spacing between rows
             newRow.className = 'flex space-x-2 quote-item-row mb-2';
             newRow.innerHTML = `
-                <input type="text" placeholder="Description" class="p-2 border rounded-lg w-6/12 quote-item-desc" required/>
+                <input type="text" placeholder="Description" 
+                       class="p-2 border rounded-lg w-6/12 quote-item-desc" required/>
                 
                 <input type="number" value="1" min="1" placeholder="Qty" 
                        class="p-2 border rounded-lg w-2/12 quote-item-quantity text-center" 
                        oninput="calculateTotal('quote')" required/>
-                
+                       
                 <input type="number" placeholder="Cost ($)" 
                        class="p-2 border rounded-lg w-3/12 quote-item-amount text-right" 
                        step="0.01" min="0" oninput="calculateTotal('quote')" required/>
@@ -410,7 +416,10 @@
             `;
             container.appendChild(newRow);
             // Re-attach event listeners for total calculation
-            attachAmountListeners('quote');
+            // Note: If you still see 'attachAmountListeners is not defined', ensure management.js is loaded first.
+            if (typeof attachAmountListeners === 'function') {
+                attachAmountListeners('quote');
+            }
         }
         
         // Initial call to add the first item row on page load (since we cleared them in previous step)
