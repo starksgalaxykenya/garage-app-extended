@@ -521,6 +521,88 @@
         const ADMIN_SECURITY_KEY = "ADMIN12345"; // Mock key for quote access
 
         // --- CORE APPLICATION FUNCTIONS (EXISTING) ---
+        // --- CORE APPLICATION FUNCTIONS (EXISTING) ---
+
+/**
+ * Hides all main content sections and displays the specified one.
+ * @param {string} sectionId The ID of the section to show.
+ */
+function showSection(sectionId) {
+    const sections = ['auth-section', 'car-entry', 'general-service', 'clients-section', 'car-list', 'completed-list', 'reports-section', 'mechanic-portal', 'finance-portal', 'parts-inventory', 'project-cars'];
+    sections.forEach(id => {
+        const section = document.getElementById(id);
+        if (section) {
+            section.style.display = 'none';
+        }
+    });
+
+    const targetSection = document.getElementById(sectionId);
+    if (targetSection) {
+        targetSection.style.display = 'block';
+    }
+}
+
+/**
+ * Handles user login and signup using Firebase Auth.
+ * @param {boolean} isLogin True for login, False for signup.
+ */
+async function handleLoginSignup(isLogin) {
+    const email = document.getElementById('auth-email').value;
+    const password = document.getElementById('auth-password').value;
+    const messageEl = document.getElementById('auth-message');
+    messageEl.textContent = '';
+
+    if (!email || !password) {
+        messageEl.textContent = 'Please enter both email and password.';
+        return;
+    }
+
+    try {
+        if (isLogin) {
+            await signInWithEmailAndPassword(auth, email, password);
+        } else {
+            // NOTE: Signup should ideally be restricted/done via Admin panel in a real system
+            const userCredential = await createUserWithEmailAndPassword(auth, email, password);
+            // Optionally, create a user record in Firestore with a default role
+            // await setDoc(doc(db, COLLECTIONS.USERS, userCredential.user.uid), { 
+            //     email: email, 
+            //     role: 'mechanic' 
+            // });
+            alert('Signup successful! Please log in.');
+        }
+    } catch (error) {
+        console.error("Auth Error:", error);
+        messageEl.textContent = `Authentication failed: ${error.message.replace('Firebase:', '').trim()}`;
+    }
+}
+
+/**
+ * Attaches the auth state listener to manage UI visibility.
+ */
+onAuthStateChanged(auth, (user) => {
+    authUser = user;
+    const logoutBtn = document.getElementById('logoutBtn');
+    if (user) {
+        // User is signed in
+        document.getElementById('auth-section').style.display = 'none';
+        logoutBtn.style.display = 'block';
+        showSection('car-entry'); // Default view after login
+        
+        // Fetch user role and dynamic data upon login (Essential for the new portals)
+        // fetchUserRole(user.uid); 
+        // fetchClientData();
+        // fetchCarList('car-list-container', COLLECTIONS.CARS);
+    } else {
+        // User is signed out
+        logoutBtn.style.display = 'none';
+        showSection('auth-section');
+    }
+});
+
+// Expose core functions globally
+window.handleLoginSignup = handleLoginSignup;
+window.showSection = showSection;
+window.signOut = () => signOut(auth); // Exporting signOut
         // ... (Existing functions like showSection, handleLoginSignup, etc. are assumed to be here) ...
 
         // --- NEW FEATURE FUNCTIONS (1-8) ---
