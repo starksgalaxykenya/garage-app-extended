@@ -119,6 +119,9 @@
                     </div>
                 </div>
 
+                <div id="report-view-section" class="mt-8 hidden bg-white p-6 rounded-xl shadow-lg">
+                    </div>
+                
                 <div class="mt-8 bg-white p-6 rounded-xl shadow-lg">
                     <h3 class="text-xl font-semibold mb-4 text-indigo-700 border-b pb-2">Today's Transactions</h3>
                     <div class="overflow-x-auto">
@@ -130,8 +133,8 @@
                                     <th class="px-3 py-3 text-left text-xs font-medium text-gray-500 uppercase tracking-wider">Plate</th>
                                     <th class="px-3 py-3 text-left text-xs font-medium text-gray-500 uppercase tracking-wider text-green-600">Income ($)</th>
                                     <th class="px-3 py-3 text-left text-xs font-medium text-gray-500 uppercase tracking-wider text-red-600">Expense ($)</th>
-                                    <th class="px-3 py-3 text-left text-xs font-medium text-gray-500 uppercase tracking-wider text-indigo-600">Profit ($)</th>
-                                    <th class="px-3 py-3 text-left text-xs font-medium text-gray-500 uppercase tracking-wider">Actions</th>
+                                    <th class="px-3 py-3 text-left text-xs font-medium text-gray-500 uppercase tracking-wider">Profit ($)</th>
+                                    <th class="px-3 py-3 text-left text-xs font-medium text-gray-500 uppercase tracking-wider">Action</th>
                                 </tr>
                             </thead>
                             <tbody id="daily-transactions-body" class="bg-white divide-y divide-gray-200">
@@ -140,34 +143,64 @@
                     </div>
                 </div>
 
-                <div id="report-view-section" class="mt-8 hidden">
-                    <h3 class="text-3xl font-bold text-gray-800 border-b pb-2 mb-6">Financial Trends</h3>
-                    <div class="grid grid-cols-1 lg:grid-cols-3 gap-6">
-                        <div class="lg:col-span-2 bg-white p-6 rounded-xl shadow-lg">
-                            <h4 class="text-xl font-semibold mb-4 text-indigo-700">Monthly Profit/Loss Trend</h4>
-                            <canvas id="pl-chart"></canvas>
-                        </div>
-                        <div class="bg-white p-6 rounded-xl shadow-lg">
-                            <h4 class="text-xl font-semibold mb-4 text-indigo-700">Past Daily Reports</h4>
-                            <div class="space-y-3" id="past-reports-list">
-                                <p class="text-gray-500">No reports found.</p>
-                            </div>
-                        </div>
-                    </div>
-                </div>
-
             </div>
 
             <div id="content-inventory" class="tab-content hidden">
                 <h2 class="text-3xl font-bold text-gray-800 border-b pb-2 mb-6">Parts Inventory Management</h2>
-                <div class="bg-white p-6 rounded-xl shadow-lg">
-                    <p class="text-gray-500">Inventory logic is in place from the previous step (CRUD). Data from this collection is used for quotes and receipts.</p>
+                
+                <div class="grid grid-cols-1 lg:grid-cols-3 gap-6">
+                    <div class="lg:col-span-1 bg-white p-6 rounded-xl shadow-lg h-full">
+                        <h3 class="text-xl font-semibold mb-4 text-indigo-700 border-b pb-2">Add New Part to Stock</h3>
+                        <form id="add-part-form" class="space-y-3">
+                            <input id="part-name" type="text" placeholder="Part Name" required class="w-full p-2 border rounded-lg" />
+                            <input id="part-sku" type="text" placeholder="SKU (Optional)" class="w-full p-2 border rounded-lg" />
+                            <input id="part-quantity" type="number" placeholder="Quantity in Stock" required class="w-full p-2 border rounded-lg" min="1" value="1" />
+                            <input id="part-supplier-price" type="number" placeholder="Supplier Cost Price ($)" required class="w-full p-2 border rounded-lg" step="0.01" min="0" />
+                            <input id="part-selling-price" type="number" placeholder="Selling Price ($)" required class="w-full p-2 border rounded-lg" step="0.01" min="0" />
+                            <button type="submit" class="w-full bg-indigo-600 hover:bg-indigo-700 text-white font-bold py-3 rounded-lg transition duration-150"><i class="fas fa-box-open mr-2"></i>Add Part to Inventory</button>
+                        </form>
+                    </div>
+                    
+                    <div class="lg:col-span-2 bg-white p-6 rounded-xl shadow-lg h-full">
+                        <h3 class="text-xl font-semibold mb-4 text-green-700 border-b pb-2">Sell Part & Commit to Finance</h3>
+                        <form id="sell-part-form" class="grid grid-cols-3 gap-4">
+                            <select id="part-sale-select" class="p-2 border rounded-lg col-span-3" required>
+                                <option value="">Select Part to Sell (Stock)</option>
+                                </select>
+                            <input id="part-sale-quantity" type="number" placeholder="Quantity Sold" required class="p-2 border rounded-lg" min="1" value="1" />
+                            <input id="part-sale-plate" type="text" placeholder="Car Plate (Optional)" class="p-2 border rounded-lg" />
+                            
+                            <div class="col-span-3 pt-2 border-t mt-4 flex justify-between items-center">
+                                <span class="font-bold text-gray-700">Total Profit for Sale:</span>
+                                <span id="part-sale-profit-display" class="font-bold text-xl text-green-600">$0.00</span>
+                            </div>
+                            
+                            <button type="submit" id="commit-part-sale-btn" class="col-span-3 w-full bg-green-600 hover:bg-green-700 text-white font-bold py-3 rounded-lg transition duration-150" disabled><i class="fas fa-hand-holding-usd mr-2"></i>Commit Sale & Update Finance</button>
+                        </form>
+                    </div>
+                    
+                    <div class="lg:col-span-3 bg-white p-6 rounded-xl shadow-lg mt-8">
+                        <h3 class="text-xl font-semibold mb-4 text-indigo-700 border-b pb-2">Current Stock</h3>
+                        <div class="overflow-x-auto">
+                            <table class="min-w-full divide-y divide-gray-200">
+                                <thead class="bg-gray-50">
+                                    <tr>
+                                        <th class="px-6 py-3 text-left text-xs font-medium text-gray-500 uppercase tracking-wider">Part Name (SKU)</th>
+                                        <th class="px-6 py-3 text-left text-xs font-medium text-gray-500 uppercase tracking-wider">In Stock</th>
+                                        <th class="px-6 py-3 text-left text-xs font-medium text-gray-500 uppercase tracking-wider">Cost Price ($)</th>
+                                        <th class="px-6 py-3 text-left text-xs font-medium text-gray-500 uppercase tracking-wider">Selling Price ($)</th>
+                                        <th class="px-6 py-3 text-left text-xs font-medium text-gray-500 uppercase tracking-wider">Actions</th>
+                                    </tr>
+                                </thead>
+                                <tbody id="parts-inventory-body" class="bg-white divide-y divide-gray-200">
+                                    </tbody>
+                            </table>
+                        </div>
+                    </div>
                 </div>
             </div>
-
             <div id="content-suppliers" class="tab-content hidden">
                 <h2 class="text-3xl font-bold text-gray-800 border-b pb-2 mb-6">Supplier Management & Contacts</h2>
-                
                 <div class="grid grid-cols-1 lg:grid-cols-2 gap-6">
                     <div class="bg-white p-6 rounded-xl shadow-lg">
                         <h3 class="text-xl font-semibold mb-4 text-indigo-700 border-b pb-2">Add New Supplier</h3>
@@ -180,25 +213,23 @@
                             <button type="submit" class="w-full bg-indigo-600 hover:bg-indigo-700 text-white font-bold py-3 rounded-lg transition duration-150"><i class="fas fa-user-plus mr-2"></i>Save Supplier</button>
                         </form>
                     </div>
-
                     <div class="bg-white p-6 rounded-xl shadow-lg">
                         <h3 class="text-xl font-semibold mb-4 text-indigo-700 border-b pb-2">Request Supplies via WhatsApp</h3>
                         <select id="whatsapp-supplier-select" class="w-full p-2 border rounded-lg mb-3">
                             <option value="">Select Supplier</option>
                             </select>
-                        <textarea id="supplies-list" placeholder="Enter supplies needed, one item per line (e.g., Oil Filter Z-45 x 10, Brake Pads - BMW x 5)" rows="6" class="w-full p-2 border rounded-lg mb-4"></textarea>
-                        <button id="order-whatsapp-btn" class="w-full bg-green-500 hover:bg-green-600 text-white font-bold py-3 rounded-lg transition duration-150" disabled><i class="fab fa-whatsapp mr-2"></i>Order via WhatsApp</button>
+                        <textarea id="supplies-list" placeholder="List the required parts/supplies (one item per line)" rows="4" class="w-full p-2 border rounded-lg mb-4"></textarea>
+                        <button id="order-whatsapp-btn" class="w-full bg-green-500 hover:bg-green-600 text-white font-bold py-3 rounded-lg transition duration-150" disabled><i class="fab fa-whatsapp mr-2"></i>Send Order via WhatsApp</button>
                     </div>
                 </div>
-
                 <div class="mt-8 bg-white p-6 rounded-xl shadow-lg">
-                    <h3 class="text-xl font-semibold mb-4 text-indigo-700 border-b pb-2">Current Supplier List</h3>
+                    <h3 class="text-xl font-semibold mb-4 text-indigo-700 border-b pb-2">Current Suppliers</h3>
                     <div class="overflow-x-auto">
                         <table class="min-w-full divide-y divide-gray-200">
                             <thead class="bg-gray-50">
                                 <tr>
                                     <th class="px-6 py-3 text-left text-xs font-medium text-gray-500 uppercase tracking-wider">Name</th>
-                                    <th class="px-6 py-3 text-left text-xs font-medium text-gray-500 uppercase tracking-wider">Supplies</th>
+                                    <th class="px-6 py-3 text-left text-xs font-medium text-gray-500 uppercase tracking-wider">Type</th>
                                     <th class="px-6 py-3 text-left text-xs font-medium text-gray-500 uppercase tracking-wider">Contact</th>
                                     <th class="px-6 py-3 text-left text-xs font-medium text-gray-500 uppercase tracking-wider">Owed ($)</th>
                                     <th class="px-6 py-3 text-left text-xs font-medium text-gray-500 uppercase tracking-wider">Actions</th>
@@ -209,12 +240,10 @@
                         </table>
                     </div>
                 </div>
-
             </div>
 
             <div id="content-invoices" class="tab-content hidden">
-                <h2 class="text-3xl font-bold text-gray-800 border-b pb-2 mb-6">Receipts & Invoices</h2>
-                
+                <h2 class="text-3xl font-bold text-gray-800 border-b pb-2 mb-6">Receipt & Invoice Management</h2>
                 <div class="grid grid-cols-1 lg:grid-cols-3 gap-6">
                     <div class="lg:col-span-1 bg-white p-6 rounded-xl shadow-lg">
                         <h3 class="text-xl font-semibold mb-4 text-indigo-700 border-b pb-2">Create New Invoice</h3>
@@ -222,12 +251,20 @@
                             <input id="invoice-client-name" type="text" placeholder="Client Name" required class="w-full p-2 border rounded-lg" />
                             <input id="invoice-client-phone" type="tel" placeholder="Client Phone (+CCCXXXX)" required class="w-full p-2 border rounded-lg" />
                             <input id="invoice-car-plate" type="text" placeholder="Vehicle Plate" required class="w-full p-2 border rounded-lg" />
-                            
+
                             <h4 class="font-medium text-gray-700 mt-4">Items (Labor/Parts)</h4>
+                            <div class="flex space-x-2 text-sm font-semibold text-gray-500 mb-1">
+                                <span class="w-2/5">Description</span>
+                                <span class="w-1/5">Qty</span>
+                                <span class="w-1/4">Price/Unit</span>
+                                <span class="w-1/8"></span>
+                            </div>
                             <div id="invoice-items-container" class="space-y-2">
-                                <div class="flex space-x-2 item-row">
-                                    <input type="text" placeholder="Description" class="p-2 border rounded-lg w-3/5 item-desc" required/>
-                                    <input type="number" placeholder="Amount ($)" class="p-2 border rounded-lg w-2/5 item-amount" step="0.01" min="0" required/>
+                                <div class="flex space-x-2 item-row items-center">
+                                    <input type="text" placeholder="Description" class="p-2 border rounded-lg w-2/5 item-desc" required/>
+                                    <input type="number" placeholder="Qty" class="p-2 border rounded-lg w-1/5 item-quantity" value="1" min="1" required/>
+                                    <input type="number" placeholder="Price/Unit ($)" class="p-2 border rounded-lg w-1/4 item-amount" step="0.01" min="0" required/>
+                                    <button type="button" onclick="this.closest('.item-row').remove(); calculateTotal('invoice');" class="text-red-500 hover:text-red-700 p-2"><i class="fas fa-trash"></i></button>
                                 </div>
                             </div>
                             <button type="button" onclick="addInvoiceItemRow()" class="text-sm text-blue-600 hover:text-blue-800"><i class="fas fa-plus mr-1"></i>Add Item</button>
@@ -239,9 +276,8 @@
                             <button type="submit" class="w-full bg-green-600 hover:bg-green-700 text-white font-bold py-3 rounded-lg transition duration-150"><i class="fas fa-file-export mr-2"></i>Generate & Commit Invoice</button>
                         </form>
                     </div>
-
                     <div class="lg:col-span-2 bg-white p-6 rounded-xl shadow-lg">
-                        <h3 class="text-xl font-semibold mb-4 text-indigo-700 border-b pb-2">Past Invoices & Receipts</h3>
+                        <h3 class="text-xl font-semibold mb-4 text-indigo-700 border-b pb-2">Past Invoices</h3>
                         <div class="overflow-x-auto">
                             <table class="min-w-full divide-y divide-gray-200">
                                 <thead class="bg-gray-50">
@@ -249,7 +285,7 @@
                                         <th class="px-3 py-3 text-left text-xs font-medium text-gray-500 uppercase tracking-wider">Invoice No.</th>
                                         <th class="px-3 py-3 text-left text-xs font-medium text-gray-500 uppercase tracking-wider">Date</th>
                                         <th class="px-3 py-3 text-left text-xs font-medium text-gray-500 uppercase tracking-wider">Client / Plate</th>
-                                        <th class="px-3 py-3 text-left text-xs font-medium text-gray-500 uppercase tracking-wider">Amount ($)</th>
+                                        <th class="px-3 py-3 text-left text-xs font-medium text-gray-500 uppercase tracking-wider text-green-600">Total ($)</th>
                                         <th class="px-3 py-3 text-left text-xs font-medium text-gray-500 uppercase tracking-wider">Actions</th>
                                     </tr>
                                 </thead>
@@ -262,8 +298,7 @@
             </div>
 
             <div id="content-quotes" class="tab-content hidden">
-                <h2 class="text-3xl font-bold text-gray-800 border-b pb-2 mb-6">Repair Quotes Generation</h2>
-
+                <h2 class="text-3xl font-bold text-gray-800 border-b pb-2 mb-6">Repair Quotes Management</h2>
                 <div class="grid grid-cols-1 lg:grid-cols-3 gap-6">
                     <div class="lg:col-span-1 bg-white p-6 rounded-xl shadow-lg">
                         <h3 class="text-xl font-semibold mb-4 text-indigo-700 border-b pb-2">Create New Quote</h3>
@@ -271,25 +306,32 @@
                             <input id="quote-client-name" type="text" placeholder="Client Name" required class="w-full p-2 border rounded-lg" />
                             <input id="quote-client-phone" type="tel" placeholder="Client Phone (+CCCXXXX)" required class="w-full p-2 border rounded-lg" />
                             <input id="quote-car-plate" type="text" placeholder="Vehicle Plate" required class="w-full p-2 border rounded-lg" />
-                            <input id="quote-car-make" type="text" placeholder="Vehicle Make/Model" class="w-full p-2 border rounded-lg" />
+                            <input id="quote-car-make" type="text" placeholder="Vehicle Make/Model" required class="w-full p-2 border rounded-lg" />
 
-                            <h4 class="font-medium text-gray-700 mt-4">Estimated Items (Parts/Labor)</h4>
+                            <h4 class="font-medium text-gray-700 mt-4">Items (Labor/Parts Estimate)</h4>
+                            <div class="flex space-x-2 text-sm font-semibold text-gray-500 mb-1">
+                                <span class="w-2/5">Description</span>
+                                <span class="w-1/5">Qty</span>
+                                <span class="w-1/4">Cost/Unit</span>
+                                <span class="w-1/8"></span>
+                            </div>
                             <div id="quote-items-container" class="space-y-2">
-                                <div class="flex space-x-2 quote-item-row">
-                                    <input type="text" placeholder="Description" class="p-2 border rounded-lg w-3/5 quote-item-desc" required/>
-                                    <input type="number" placeholder="Cost ($)" class="p-2 border rounded-lg w-2/5 quote-item-amount" step="0.01" min="0" required/>
+                                <div class="flex space-x-2 quote-item-row items-center">
+                                    <input type="text" placeholder="Description" class="p-2 border rounded-lg w-2/5 quote-item-desc" required/>
+                                    <input type="number" placeholder="Qty" class="p-2 border rounded-lg w-1/5 quote-item-quantity" value="1" min="1" required/>
+                                    <input type="number" placeholder="Cost/Unit ($)" class="p-2 border rounded-lg w-1/4 quote-item-amount" step="0.01" min="0" required/>
+                                    <button type="button" onclick="this.closest('.quote-item-row').remove(); calculateTotal('quote');" class="text-red-500 hover:text-red-700 p-2"><i class="fas fa-trash"></i></button>
                                 </div>
                             </div>
-                            <button type="button" onclick="addQuoteItemRow()" class="text-sm text-blue-600 hover:text-blue-800"><i class="fas fa-plus mr-1"></i>Add Quote Item</button>
+                            <button type="button" onclick="addQuoteItemRow()" class="text-sm text-blue-600 hover:text-blue-800"><i class="fas fa-plus mr-1"></i>Add Item</button>
 
                             <div class="pt-2 border-t mt-4 flex justify-between items-center">
                                 <span class="font-bold">Estimated Total:</span>
                                 <span id="quote-total-display" class="font-bold text-xl text-indigo-600">$0.00</span>
                             </div>
-                            <button type="submit" class="w-full bg-indigo-600 hover:bg-indigo-700 text-white font-bold py-3 rounded-lg transition duration-150"><i class="fas fa-file-alt mr-2"></i>Generate & Save Quote</button>
+                            <button type="submit" class="w-full bg-indigo-600 hover:bg-indigo-700 text-white font-bold py-3 rounded-lg transition duration-150"><i class="fas fa-file-export mr-2"></i>Generate & Save Quote</button>
                         </form>
                     </div>
-
                     <div class="lg:col-span-2 bg-white p-6 rounded-xl shadow-lg">
                         <h3 class="text-xl font-semibold mb-4 text-indigo-700 border-b pb-2">Past Repair Quotes</h3>
                         <div class="overflow-x-auto">
@@ -299,7 +341,7 @@
                                         <th class="px-3 py-3 text-left text-xs font-medium text-gray-500 uppercase tracking-wider">Quote No.</th>
                                         <th class="px-3 py-3 text-left text-xs font-medium text-gray-500 uppercase tracking-wider">Date</th>
                                         <th class="px-3 py-3 text-left text-xs font-medium text-gray-500 uppercase tracking-wider">Client / Plate</th>
-                                        <th class="px-3 py-3 text-left text-xs font-medium text-gray-500 uppercase tracking-wider">Amount ($)</th>
+                                        <th class="px-3 py-3 text-left text-xs font-medium text-gray-500 uppercase tracking-wider text-indigo-600">Est. Total ($)</th>
                                         <th class="px-3 py-3 text-left text-xs font-medium text-gray-500 uppercase tracking-wider">Actions</th>
                                     </tr>
                                 </thead>
@@ -314,30 +356,38 @@
         </section>
 
     </main>
-    
+
     <script src="management.js"></script>
+    
     <script>
-        // Global functions for dynamic rows
+        // Global functions for dynamic rows (Must be after management.js is loaded)
+        
+        // --- Invoice Item Row (Requirement 3) ---
         function addInvoiceItemRow() {
             const container = document.getElementById('invoice-items-container');
             const newRow = document.createElement('div');
-            newRow.className = 'flex space-x-2 item-row';
+            newRow.className = 'flex space-x-2 item-row items-center'; 
             newRow.innerHTML = `
-                <input type="text" placeholder="Description" class="p-2 border rounded-lg w-3/5 item-desc" required/>
-                <input type="number" placeholder="Amount ($)" class="p-2 border rounded-lg w-2/5 item-amount" step="0.01" min="0" required/>
+                <input type="text" placeholder="Description" class="p-2 border rounded-lg w-2/5 item-desc" required/>
+                <input type="number" placeholder="Qty" class="p-2 border rounded-lg w-1/5 item-quantity" value="1" min="1" required/>
+                <input type="number" placeholder="Price/Unit ($)" class="p-2 border rounded-lg w-1/4 item-amount" step="0.01" min="0" required/>
+                <button type="button" onclick="this.closest('.item-row').remove(); calculateTotal('invoice');" class="text-red-500 hover:text-red-700 p-2"><i class="fas fa-trash"></i></button>
             `;
             container.appendChild(newRow);
             // Re-attach event listeners for total calculation
             attachAmountListeners('invoice');
         }
 
+        // --- Quote Item Row (Requirement 4) ---
         function addQuoteItemRow() {
             const container = document.getElementById('quote-items-container');
             const newRow = document.createElement('div');
-            newRow.className = 'flex space-x-2 quote-item-row';
+            newRow.className = 'flex space-x-2 quote-item-row items-center';
             newRow.innerHTML = `
-                <input type="text" placeholder="Description" class="p-2 border rounded-lg w-3/5 quote-item-desc" required/>
-                <input type="number" placeholder="Cost ($)" class="p-2 border rounded-lg w-2/5 quote-item-amount" step="0.01" min="0" required/>
+                <input type="text" placeholder="Description" class="p-2 border rounded-lg w-2/5 quote-item-desc" required/>
+                <input type="number" placeholder="Qty" class="p-2 border rounded-lg w-1/5 quote-item-quantity" value="1" min="1" required/>
+                <input type="number" placeholder="Cost/Unit ($)" class="p-2 border rounded-lg w-1/4 quote-item-amount" step="0.01" min="0" required/>
+                <button type="button" onclick="this.closest('.quote-item-row').remove(); calculateTotal('quote');" class="text-red-500 hover:text-red-700 p-2"><i class="fas fa-trash"></i></button>
             `;
             container.appendChild(newRow);
             // Re-attach event listeners for total calculation
