@@ -234,10 +234,15 @@ function listenForDailyTransactions() {
                 const profitText = data.profit.toFixed(2);
                 const profitClass = data.profit >= 0 ? 'text-green-600 font-medium' : 'text-red-600 font-medium';
                 
+                // FIX: Check if timestamp exists before calling .toDate()
+                const displayTime = data.timestamp 
+                    ? new Date(data.timestamp.toDate()).toLocaleTimeString() 
+                    : 'Pending...';
+
                 const tr = document.createElement('tr');
                 tr.className = 'hover:bg-gray-50';
                 tr.innerHTML = `
-                    <td class="px-3 py-2 whitespace-nowrap text-sm text-gray-500">${new Date(data.timestamp.toDate()).toLocaleTimeString()}</td>
+                    <td class="px-3 py-2 whitespace-nowrap text-sm text-gray-500">${displayTime}</td>
                     <td class="px-3 py-2 whitespace-nowrap text-sm text-gray-900">${data.subtype}</td>
                     <td class="px-3 py-2 whitespace-nowrap text-sm text-gray-500">${data.plate}</td>
                     <td class="px-3 py-2 whitespace-nowrap text-sm text-green-600">$${data.income.toFixed(2)}</td>
@@ -449,7 +454,10 @@ async function generateDailyReportPDF(reportId) {
         doc.text("Detailed Transactions", 14, doc.autoTable.previous.finalY + 10);
         
         const transactionBody = report.transactions.map(t => [
-            t.timestamp.toDate().toLocaleTimeString(),
+            // FIX: Ensure timestamp is not null and has the toDate function before calling
+            (t.timestamp && typeof t.timestamp.toDate === 'function') 
+                ? t.timestamp.toDate().toLocaleTimeString() 
+                : 'N/A',
             t.description,
             t.income.toFixed(2),
             t.expense.toFixed(2),
