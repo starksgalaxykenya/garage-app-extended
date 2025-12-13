@@ -814,11 +814,11 @@ window.deleteSupplier = deleteSupplier;
 
 
 // =================================================================
-// 7. RECEIPT & INVOICE LOGIC (FIXED: Qty, Delete, Auto-Calculation)
+// 7. RECEIPT & INVOICE LOGIC (UI FIX: Increased field widths)
 // =================================================================
 
 /**
- * Adds a new item row to the Invoice form.
+ * Adds a new item row to the Invoice form. (FIXED: Wider input fields)
  */
 function addInvoiceItemRow() {
     const container = document.getElementById('invoice-items-container');
@@ -826,9 +826,9 @@ function addInvoiceItemRow() {
     row.className = 'flex space-x-2 item-row invoice-item-row mb-2';
     row.innerHTML = `
         <input type="text" placeholder="Description" class="invoice-item-desc form-input flex-grow">
-        <input type="number" placeholder="Qty" value="1" min="1" class="invoice-item-qty form-input w-16" oninput="calculateTotal('invoice')">
-        <input type="number" placeholder="Unit Price ($)" value="0.00" min="0" step="0.01" class="invoice-item-unit-price form-input w-28" oninput="calculateTotal('invoice')">
-        <input type="text" placeholder="Total Amount ($)" value="0.00" class="invoice-item-amount form-input w-32 bg-gray-100" readonly>
+        <input type="number" placeholder="Qty" value="1" min="1" class="invoice-item-qty form-input w-24" oninput="calculateTotal('invoice')">
+        <input type="number" placeholder="Unit Price ($)" value="0.00" min="0" step="0.01" class="invoice-item-unit-price form-input w-36" oninput="calculateTotal('invoice')">
+        <input type="text" placeholder="Total Amount ($)" value="0.00" class="invoice-item-amount form-input w-40 bg-gray-100" readonly>
         <button type="button" onclick="this.parentNode.remove(); calculateTotal('invoice');" class="delete-item-btn p-2 text-red-500 hover:text-red-700">X</button>
     `;
     container.appendChild(row);
@@ -865,7 +865,7 @@ function calculateTotal(type) {
 }
 
 /**
- * Submits and commits a new Invoice. (FIXED: Uses correct selectors and saves Qty/Unit Price)
+ * Submits and commits a new Invoice. (FIXED: Uses correct selectors to match new row creation)
  */
 invoiceCreationForm.addEventListener('submit', async (e) => {
     e.preventDefault();
@@ -873,9 +873,9 @@ invoiceCreationForm.addEventListener('submit', async (e) => {
 
     const items = [];
     document.querySelectorAll('#invoice-items-container .invoice-item-row').forEach(row => {
-        // Use the explicit selectors defined in addInvoiceItemRow
-        const quantity = parseFloat(row.querySelector('.invoice-item-qty').value) || 0; // FIX: Use .invoice-item-qty
-        const unitPrice = parseFloat(row.querySelector('.invoice-item-unit-price').value) || 0; // FIX: Use .invoice-item-unit-price
+        // FIX: Use .invoice-item-qty and .invoice-item-unit-price selectors from the new row creation function
+        const quantity = parseFloat(row.querySelector('.invoice-item-qty').value) || 0; 
+        const unitPrice = parseFloat(row.querySelector('.invoice-item-unit-price').value) || 0; 
         const lineTotal = quantity * unitPrice;
 
         if (lineTotal > 0) {
@@ -960,7 +960,7 @@ function listenForInvoices() {
 }
 
 /**
- * Generates and shares the Invoice PDF. (Requirement 3: Updated PDF table for Quantity)
+ * Generates and shares the Invoice PDF. (Safely handle missing Qty/UnitPrice from old data)
  */
 async function generateInvoicePDF(invoiceId, clientPhone) {
     try {
@@ -986,18 +986,24 @@ async function generateInvoicePDF(invoiceId, clientPhone) {
         doc.text(`Vehicle Plate: ${invoice.carPlate}`, 14, 60);
 
         // Items Table
-        const itemBody = invoice.items.map(item => [
-            item.description, 
-            item.quantity.toString(), // New column (FIXED: now has data due to updated form listener)
-            `$${item.unitPrice.toFixed(2)}`, // New column 
-            `$${item.amount.toFixed(2)}` // Line Total
-        ]);
+        const itemBody = invoice.items.map(item => {
+            // FIX: Safely retrieve quantity, unitPrice, and amount, defaulting to 0 if undefined/null
+            const quantity = item.quantity ?? 0;
+            const unitPrice = item.unitPrice ?? 0;
+            const amount = item.amount ?? 0;
+
+            return [
+                item.description, 
+                quantity.toString(), 
+                `$${unitPrice.toFixed(2)}`, 
+                `$${amount.toFixed(2)}`
+            ];
+        });
         
         doc.autoTable({
             startY: 70,
-            head: [['Description', 'Qty', 'Unit Price ($)', 'Line Total ($)']], // Updated header
+            head: [['Description', 'Qty', 'Unit Price ($)', 'Line Total ($)']], 
             body: itemBody,
-            // Adjusted footer to match the 4 columns: [empty, empty, 'Total', amount]
             foot: [['', '', 'Total', `$${invoice.total.toFixed(2)}`]], 
             theme: 'grid',
             styles: { fontSize: 10 },
@@ -1033,11 +1039,11 @@ window.deleteInvoice = deleteInvoice;
 
 
 // =================================================================
-// 8. REPAIR QUOTES LOGIC (FIXED: Qty, Delete, Auto-Calculation)
+// 8. REPAIR QUOTES LOGIC (UI FIX: Increased field widths)
 // =================================================================
 
 /**
- * Adds a new item row to the Quote form.
+ * Adds a new item row to the Quote form. (FIXED: Wider input fields)
  */
 function addQuoteItemRow() {
     const container = document.getElementById('quote-items-container');
@@ -1045,9 +1051,9 @@ function addQuoteItemRow() {
     row.className = 'flex space-x-2 item-row quote-item-row mb-2';
     row.innerHTML = `
         <input type="text" placeholder="Description" class="quote-item-desc form-input flex-grow">
-        <input type="number" placeholder="Qty" value="1" min="1" class="quote-item-qty form-input w-16" oninput="calculateTotal('quote')">
-        <input type="number" placeholder="Unit Price ($)" value="0.00" min="0" step="0.01" class="quote-item-unit-price form-input w-28" oninput="calculateTotal('quote')">
-        <input type="text" placeholder="Total Amount ($)" value="0.00" class="quote-item-amount form-input w-32 bg-gray-100" readonly>
+        <input type="number" placeholder="Qty" value="1" min="1" class="quote-item-qty form-input w-24" oninput="calculateTotal('quote')">
+        <input type="number" placeholder="Unit Price ($)" value="0.00" min="0" step="0.01" class="quote-item-unit-price form-input w-36" oninput="calculateTotal('quote')">
+        <input type="text" placeholder="Total Amount ($)" value="0.00" class="quote-item-amount form-input w-40 bg-gray-100" readonly>
         <button type="button" onclick="this.parentNode.remove(); calculateTotal('quote');" class="delete-item-btn p-2 text-red-500 hover:text-red-700">X</button>
     `;
     container.appendChild(row);
@@ -1072,7 +1078,7 @@ window.calculateTotal = calculateTotal;
 
 
 /**
- * Submits and saves a new Quote. (FIXED: Uses correct selectors and saves Qty/Unit Price)
+ * Submits and saves a new Quote. (FIXED: Uses correct selectors to match new row creation)
  */
 quoteCreationForm.addEventListener('submit', async (e) => {
     e.preventDefault();
@@ -1080,7 +1086,7 @@ quoteCreationForm.addEventListener('submit', async (e) => {
 
     const items = [];
     document.querySelectorAll('#quote-items-container .quote-item-row').forEach(row => {
-        // FIX: Use the explicit selectors defined in addQuoteItemRow
+        // FIX: Use .quote-item-qty and .quote-item-unit-price selectors from the new row creation function
         const quantity = parseFloat(row.querySelector('.quote-item-qty').value) || 0; 
         const unitPrice = parseFloat(row.querySelector('.quote-item-unit-price').value) || 0; 
         const lineTotal = quantity * unitPrice;
@@ -1088,8 +1094,8 @@ quoteCreationForm.addEventListener('submit', async (e) => {
         if (lineTotal > 0) {
             items.push({
                 description: row.querySelector('.quote-item-desc').value,
-                quantity: quantity, // This is now correctly saved
-                unitPrice: unitPrice, // This is now correctly saved
+                quantity: quantity, 
+                unitPrice: unitPrice, 
                 amount: lineTotal 
             });
         }
@@ -1154,7 +1160,7 @@ function listenForQuotes() {
 
 
 /**
- * Generates and shares the Repair Quote PDF. (Requirement 4: Updated PDF table for Quantity)
+ * Generates and shares the Repair Quote PDF. (Safely handle missing Qty/UnitPrice from old data)
  */
 async function generateQuotePDF(quoteId, clientPhone) {
     try {
@@ -1181,18 +1187,24 @@ async function generateQuotePDF(quoteId, clientPhone) {
         doc.text(`Vehicle Plate: ${quote.carPlate}`, 14, 65);
 
         // Items Table
-        const itemBody = quote.items.map(item => [
-            item.description, 
-            item.quantity.toString(), // This is now safe as 'quantity' is guaranteed to exist
-            `$${item.unitPrice.toFixed(2)}`, // This is now safe as 'unitPrice' is guaranteed to exist
-            `$${item.amount.toFixed(2)}` // Line Total
-        ]);
+        const itemBody = quote.items.map(item => {
+            // FIX: Safely retrieve quantity, unitPrice, and amount, defaulting to 0 if undefined/null
+            const quantity = item.quantity ?? 0;
+            const unitPrice = item.unitPrice ?? 0;
+            const amount = item.amount ?? 0;
+
+            return [
+                item.description, 
+                quantity.toString(), 
+                `$${unitPrice.toFixed(2)}`, 
+                `$${amount.toFixed(2)}` 
+            ];
+        });
         
         doc.autoTable({
             startY: 75,
-            head: [['Item/Service', 'Qty', 'Est. Unit Cost ($)', 'Est. Line Total ($)']], // Updated header
+            head: [['Item/Service', 'Qty', 'Est. Unit Cost ($)', 'Est. Line Total ($)']], 
             body: itemBody,
-            // Adjusted footer to match the 4 columns: [empty, empty, 'Estimated Total', amount]
             foot: [['', '', 'Estimated Total', `$${quote.total.toFixed(2)}`]],
             theme: 'grid',
             styles: { fontSize: 10 },
