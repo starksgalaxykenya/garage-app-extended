@@ -49,6 +49,15 @@ const whatsappSupplierSelect = document.getElementById('whatsapp-supplier-select
 const suppliesListTextarea = document.getElementById('supplies-list');
 const orderWhatsappBtn = document.getElementById('order-whatsapp-btn');
 
+// Inventory UI Elements (Requirement 1)
+const addPartForm = document.getElementById('add-part-form');
+const partsInventoryBody = document.getElementById('parts-inventory-body');
+const sellPartForm = document.getElementById('sell-part-form');
+const partSaleSelect = document.getElementById('part-sale-select');
+const partSaleQuantityInput = document.getElementById('part-sale-quantity');
+const partSaleProfitDisplay = document.getElementById('part-sale-profit-display');
+const commitPartSaleBtn = document.getElementById('commit-part-sale-btn');
+
 // Invoice/Quote UI Elements
 const invoiceCreationForm = document.getElementById('invoice-creation-form');
 const quoteCreationForm = document.getElementById('quote-creation-form');
@@ -59,12 +68,14 @@ const quotesTableBody = document.getElementById('quotes-table-body');
 const dailyTransactionsRef = db.collection('dailyTransactions');
 const pastReportsRef = db.collection('financialReports');
 const suppliersRef = db.collection('suppliers');
+const partsInventoryRef = db.collection('partsInventory'); // New Collection (Requirement 1)
 const invoicesRef = db.collection('invoices');
 const quotesRef = db.collection('quotes');
 
 let currentDailyTransactions = [];
 let plChartInstance = null;
 let allSuppliers = [];
+let allPartsInventory = []; // Stores the current inventory data for quick lookups
 
 // =================================================================
 // 2. AUTHENTICATION LOGIC (Security Gate)
@@ -94,6 +105,7 @@ auth.onAuthStateChanged((user) => {
         // Load data for all modules on login
         listenForDailyTransactions();
         listenForSuppliers();
+        listenForPartsInventory(); // Load Inventory (Requirement 1)
         listenForInvoices();
         listenForQuotes();
 
@@ -454,7 +466,7 @@ async function generateDailyReportPDF(reportId) {
         doc.text("Detailed Transactions", 14, doc.autoTable.previous.finalY + 10);
         
         const transactionBody = report.transactions.map(t => [
-            // FIX: Ensure timestamp is not null and has the toDate function before calling
+            // FIX: Ensure timestamp exists before converting
             (t.timestamp && typeof t.timestamp.toDate === 'function') 
                 ? t.timestamp.toDate().toLocaleTimeString() 
                 : 'N/A',
@@ -484,7 +496,202 @@ window.generateDailyReportPDF = generateDailyReportPDF; // Expose to global scop
 
 
 // =================================================================
-// 5. SUPPLIERS & CONTACTS LOGIC
+// 5. PARTS INVENTORY LOGIC (Requirement 1)
+// =================================================================
+
+/**
+ * Saves a new part to inventory.
+ */
+addPartForm.addEventListener('submit', async (e) => {
+    e.preventDefault();
+    const part = {
+        name: document.getElementById('part-name').value,
+        sku: document.getElementById('part-sku').value || '',
+        quantity: parseInt(document.getElementById('part-quantity').value),
+        supplierPrice: parseFloat(document.getElementById('part-supplier-price').value),
+        sellingPrice: parseFloat(document.getElementById('part-selling-price').value),
+        createdAt: firebase.firestore.FieldValue.serverTimestamp()
+    };
+    if (part.sellingPrice < part.supplierPrice) {
+         if (!confirm(`Warning: Selling Price ($${part.sellingPrice.toFixed(2)}) is less than Supplier Price ($${part.supplierPrice.toFixed(2)}). Continue?`)) return;
+    }
+    
+    try {
+        await partsInventoryRef.add(part);
+        addPartForm.reset();
+        alert('Part added successfully!');
+    } catch (error) {
+        alert('Failed to save part.');
+        console.error('Part Save Error: ', error);
+    }
+});
+
+/**
+ * Attaches listeners for part sale profit calculation.
+ */
+function attachPartSaleListeners() {
+    [partSaleSelect, partSaleQuantityInput].forEach(input => {
+        input.removeEventListener('input', calculatePartSaleProfit); // Remove previous listeners
+        input.addEventListener('input', calculatePartSaleProfit);
+    });
+    // Manually run calculation in case the list was repopulated
+    calculatePartSaleProfit();
+}
+
+/**
+ * Calculates and displays profit for the selected part sale.
+ */
+function calculatePartSaleProfit() {
+    const partOption = partSaleSelect.options[partSaleSelect.selectedIndex];
+    const quantitySold = parseInt(partSaleQuantityInput.value) || 0;
+    
+    commitPartSaleBtn.disabled = true;
+    partSaleProfitDisplay.textContent = '$0.00';
+    partSaleProfitDisplay.className = 'font-bold text-xl text-gray-500';
+
+    if (!partOption || !partOption.value || quantitySold <= 0) return;
+
+    const stock = parseInt(partOption.dataset.stock);
+    if (quantitySold > stock) {
+        partSaleProfitDisplay.textContent = 'Error: Qty exceeds stock!';
+        partSaleProfitDisplay.className = 'font-bold text-lg text-red-600';
+        return;
+    }
+
+    const supplierPrice = parseFloat(partOption.dataset.supplierPrice);
+    const sellingPrice = parseFloat(partOption.dataset.sellingPrice);
+    
+    const profitPerUnit = sellingPrice - supplierPrice;
+    const totalProfit = profitPerUnit * quantitySold;
+    
+    partSaleProfitDisplay.textContent = `$${totalProfit.toFixed(2)}`;
+    partSaleProfitDisplay.className = totalProfit >= 0 ? 'font-bold text-xl text-green-600' : 'font-bold text-xl text-red-600';
+    commitPartSaleBtn.disabled = false;
+}
+
+
+/**
+ * Commits a part sale, updates inventory, and records finance transaction.
+ */
+sellPartForm.addEventListener('submit', async (e) => {
+    e.preventDefault();
+
+    const partId = partSaleSelect.value;
+    const partOption = partSaleSelect.options[partSaleSelect.selectedIndex];
+    const quantitySold = parseInt(partSaleQuantityInput.value);
+    const carPlate = document.getElementById('part-sale-plate').value || 'N/A';
+    
+    if (!partId || quantitySold <= 0) return alert("Please select a part and specify quantity.");
+    
+    const stock = parseInt(partOption.dataset.stock);
+    if (quantitySold > stock) return alert(`Cannot sell ${quantitySold}. Only ${stock} in stock.`);
+
+    const supplierPrice = parseFloat(partOption.dataset.supplierPrice);
+    const sellingPrice = parseFloat(partOption.dataset.sellingPrice);
+    const partName = partOption.textContent.substring(0, partOption.textContent.indexOf(' (Stock'));
+
+    const totalIncome = sellingPrice * quantitySold;
+    const totalExpense = supplierPrice * quantitySold; // Cost of goods sold
+    const totalProfit = totalIncome - totalExpense;
+
+    if (!confirm(`Confirm sale of ${quantitySold} x ${partName} for $${totalIncome.toFixed(2)} (Profit: $${totalProfit.toFixed(2)})?`)) return;
+
+    try {
+        const batch = db.batch();
+        
+        // 1. Update Inventory Stock
+        const newQuantity = stock - quantitySold;
+        const partRef = partsInventoryRef.doc(partId);
+        batch.update(partRef, { quantity: newQuantity });
+
+        // 2. Record Finance Transaction
+        const financeTransaction = {
+            type: 'PART SALE',
+            subtype: partName,
+            plate: carPlate,
+            description: `${quantitySold} x ${partName} sold (Plate: ${carPlate})`,
+            income: totalIncome,
+            expense: totalExpense, // Record supplier cost as expense for accurate P&L
+            profit: totalProfit,
+            timestamp: firebase.firestore.FieldValue.serverTimestamp(),
+            isJob: true,
+            date: new Date().toLocaleDateString('en-CA')
+        };
+        batch.set(dailyTransactionsRef.doc(), financeTransaction);
+
+        await batch.commit();
+
+        alert(`Sale committed successfully! Stock updated. Profit: $${totalProfit.toFixed(2)} recorded in Finance.`);
+        sellPartForm.reset();
+        partSaleProfitDisplay.textContent = '$0.00';
+    } catch (error) {
+        alert('Failed to commit sale.');
+        console.error('Part Sale Error: ', error);
+    }
+});
+
+
+/**
+ * Real-time listener for the Parts Inventory. (Requirement 1)
+ */
+function listenForPartsInventory() {
+    partsInventoryRef.orderBy('name', 'asc').onSnapshot(snapshot => {
+        allPartsInventory = [];
+        partsInventoryBody.innerHTML = '';
+        partSaleSelect.innerHTML = '<option value="">Select Part to Sell</option>';
+        
+        snapshot.forEach(doc => {
+            const data = doc.data();
+            allPartsInventory.push({ id: doc.id, ...data });
+
+            // Render table row
+            const tr = document.createElement('tr');
+            tr.className = 'hover:bg-gray-50';
+            const profitPerUnit = data.sellingPrice - data.supplierPrice;
+            const quantityClass = data.quantity < 5 ? 'text-red-600 font-bold' : 'text-gray-900';
+            
+            tr.innerHTML = `
+                <td class="px-6 py-4 whitespace-nowrap text-sm font-medium text-gray-900">${data.name} (${data.sku || 'N/A'})</td>
+                <td class="px-6 py-4 whitespace-nowrap text-sm ${quantityClass}">${data.quantity}</td>
+                <td class="px-6 py-4 whitespace-nowrap text-sm text-red-600">$${data.supplierPrice.toFixed(2)}</td>
+                <td class="px-6 py-4 whitespace-nowrap text-sm text-green-600">$${data.sellingPrice.toFixed(2)}</td>
+                <td class="px-6 py-4 whitespace-nowrap text-sm font-medium">
+                    <button onclick="deletePart('${doc.id}')" class="text-red-600 hover:text-red-900">Delete</button>
+                </td>
+            `;
+            partsInventoryBody.appendChild(tr);
+
+            // Populate Part Sale dropdown if stock > 0
+            if (data.quantity > 0) {
+                const option = document.createElement('option');
+                option.value = doc.id;
+                const profitText = profitPerUnit.toFixed(2);
+                option.textContent = `${data.name} (Stock: ${data.quantity}, Profit/Unit: $${profitText})`;
+                option.dataset.supplierPrice = data.supplierPrice; // Store prices for calculation
+                option.dataset.sellingPrice = data.sellingPrice;
+                option.dataset.stock = data.quantity;
+                partSaleSelect.appendChild(option);
+            }
+        });
+        
+        // Re-attach listeners after repopulating the dropdown
+        attachPartSaleListeners(); 
+
+    }, error => {
+        console.error("Error listening to parts inventory: ", error);
+    });
+}
+window.deletePart = (id) => { 
+    if (confirm("Are you sure you want to delete this part from inventory? This cannot be undone.")) {
+        partsInventoryRef.doc(id).delete().catch(e => {
+            alert('Failed to delete part. Check console for error.');
+            console.error("Delete Part Error", e);
+        });
+    }
+};
+
+// =================================================================
+// 6. SUPPLIERS & CONTACTS LOGIC
 // =================================================================
 
 /**
@@ -540,7 +747,7 @@ function listenForSuppliers() {
 
             // Populate WhatsApp dropdown
             const option = document.createElement('option');
-            option.value = data.id;
+            option.value = doc.id;
             option.textContent = data.name;
             whatsappSupplierSelect.appendChild(option);
         });
@@ -552,7 +759,7 @@ function listenForSuppliers() {
 }
 
 /**
- * WhatsApp Order Logic
+ * WhatsApp Order Logic (Requirement 2: Fixed contact retrieval/validation)
  */
 whatsappSupplierSelect.addEventListener('change', () => {
     orderWhatsappBtn.disabled = whatsappSupplierSelect.value === "";
@@ -568,12 +775,24 @@ orderWhatsappBtn.addEventListener('click', () => {
     }
 
     const supplier = allSuppliers.find(s => s.id === supplierId);
-    if (!supplier || !supplier.contact) {
-        alert("Supplier contact not found.");
+    
+    if (!supplier) {
+        alert("Supplier data not found.");
+        return;
+    }
+    
+    if (!supplier.contact) {
+        alert(`Supplier contact not found for ${supplier.name}.`);
         return;
     }
     
     const cleanedContact = supplier.contact.replace(/\D/g, ''); // Remove all non-digits
+    
+    if (cleanedContact.length < 9) { // Simple validation for a cleaned phone number
+        alert(`The contact number for ${supplier.name} seems invalid: ${supplier.contact}`);
+        return;
+    }
+
     const message = `*Supply Request for ${supplier.name}*\n\n--- REQUIRED ITEMS ---\n\n${suppliesText}\n\n--- END OF LIST ---\n\n*Garage Manager PRO*`;
     const encodedMessage = encodeURIComponent(message);
     
@@ -585,42 +804,57 @@ orderWhatsappBtn.addEventListener('click', () => {
 
 // Stubs for actions
 function editSupplier(id) { alert(`Editing supplier ${id}...`); }
-function deleteSupplier(id) { alert(`Deleting supplier ${id}...`); }
+function deleteSupplier(id) { 
+    if (confirm("Are you sure you want to delete this supplier?")) {
+        suppliersRef.doc(id).delete().catch(e => console.error("Delete Error", e));
+    }
+}
 window.editSupplier = editSupplier;
 window.deleteSupplier = deleteSupplier;
 
 
 // =================================================================
-// 6. RECEIPT & INVOICE LOGIC
+// 7. RECEIPT & INVOICE LOGIC (Requirement 3)
 // =================================================================
 
 /**
- * Calculates the total amount for invoices/quotes in real-time.
+ * Calculates the total amount for invoices/quotes in real-time. (Requirement 3 & 4: Updated to handle Quantity)
  */
 function calculateTotal(type) {
     const container = document.getElementById(`${type}-items-container`);
-    const amountInputs = container.querySelectorAll(`.${type}-item-amount`);
+    const itemRows = container.querySelectorAll(`.${type}-item-row`); // Select item rows now
     let total = 0;
-    amountInputs.forEach(input => {
-        total += parseFloat(input.value) || 0;
+    
+    itemRows.forEach(row => {
+        const quantity = parseFloat(row.querySelector(`.${type}-item-quantity`).value) || 0;
+        const amount = parseFloat(row.querySelector(`.${type}-item-amount`).value) || 0; // This is unit price
+        total += (quantity * amount);
     });
+    
     document.getElementById(`${type}-total-display`).textContent = `$${total.toFixed(2)}`;
     return total;
 }
 
 /**
- * Attaches listeners to amount inputs for real-time total calculation.
+ * Attaches listeners to quantity and amount inputs for real-time total calculation. (Requirement 3 & 4: Updated listeners)
  */
 function attachAmountListeners(type) {
     const container = document.getElementById(`${type}-items-container`);
-    container.querySelectorAll(`.${type}-item-amount`).forEach(input => {
-        input.removeEventListener('input', () => calculateTotal(type)); // Prevent duplicates
+    // Select all quantity and amount inputs
+    const inputs = container.querySelectorAll(`.${type}-item-quantity, .${type}-item-amount`); 
+
+    inputs.forEach(input => {
+        // We only need to attach one listener per input that triggers the full calculation
+        input.removeEventListener('input', () => calculateTotal(type)); 
         input.addEventListener('input', () => calculateTotal(type));
     });
+    // Run initial calculation after attaching listeners
+    calculateTotal(type);
 }
 
 // Initial attachment of listeners
 document.addEventListener('DOMContentLoaded', () => {
+    // Only attach to existing rows, which are now correctly defined in management.html
     attachAmountListeners('invoice');
     attachAmountListeners('quote');
 });
@@ -635,9 +869,13 @@ invoiceCreationForm.addEventListener('submit', async (e) => {
 
     const items = [];
     document.querySelectorAll('#invoice-items-container .item-row').forEach(row => {
+        const quantity = parseFloat(row.querySelector('.item-quantity').value) || 0;
+        const unitPrice = parseFloat(row.querySelector('.item-amount').value) || 0;
         items.push({
             description: row.querySelector('.item-desc').value,
-            amount: parseFloat(row.querySelector('.item-amount').value)
+            quantity: quantity, // New field (Requirement 3)
+            unitPrice: unitPrice, // New field (Requirement 3)
+            amount: quantity * unitPrice // Total for the line item
         });
     });
 
@@ -662,7 +900,7 @@ invoiceCreationForm.addEventListener('submit', async (e) => {
             plate: invoice.carPlate,
             description: `Invoice #${invoice.invoiceNo} paid by ${invoice.clientName}`,
             income: totalAmount,
-            expense: 0, // Assuming labor and part cost expense is recorded separately in finance or derived from main app job card
+            expense: 0, 
             profit: totalAmount,
             timestamp: firebase.firestore.FieldValue.serverTimestamp(),
             isJob: true,
@@ -672,7 +910,7 @@ invoiceCreationForm.addEventListener('submit', async (e) => {
         
         invoiceCreationForm.reset();
         document.getElementById('invoice-items-container').innerHTML = ''; // Clear items
-        addInvoiceItemRow(); // Add back one empty row
+        addInvoiceItemRow(); // Add back one empty row (defined in management.html script block)
         alert('Invoice committed and amount reflected in Finance successfully!');
     } catch (error) {
         alert('Failed to generate or commit invoice.');
@@ -708,7 +946,7 @@ function listenForInvoices() {
 }
 
 /**
- * Generates and shares the Invoice PDF.
+ * Generates and shares the Invoice PDF. (Requirement 3: Updated PDF table for Quantity)
  */
 async function generateInvoicePDF(invoiceId, clientPhone) {
     try {
@@ -734,23 +972,25 @@ async function generateInvoicePDF(invoiceId, clientPhone) {
         doc.text(`Vehicle Plate: ${invoice.carPlate}`, 14, 60);
 
         // Items Table
-        const itemBody = invoice.items.map(item => [item.description, `$${item.amount.toFixed(2)}`]);
+        const itemBody = invoice.items.map(item => [
+            item.description, 
+            item.quantity.toString(), // New column
+            `$${item.unitPrice.toFixed(2)}`, // New column (assuming data is stored as unitPrice)
+            `$${item.amount.toFixed(2)}` // Line Total
+        ]);
         
         doc.autoTable({
             startY: 70,
-            head: [['Description', 'Amount ($)']],
+            head: [['Description', 'Qty', 'Unit Price ($)', 'Line Total ($)']], // Updated header
             body: itemBody,
-            foot: [['Total', `$${invoice.total.toFixed(2)}`]],
+            foot: [['', '', 'Total', `$${invoice.total.toFixed(2)}`]],
             theme: 'grid',
             styles: { fontSize: 10 },
             headStyles: { fillColor: [50, 50, 100] },
             footStyles: { fillColor: [200, 200, 250], textColor: [0, 0, 0], fontSize: 12, fontStyle: 'bold' }
         });
         
-        const pdfOutput = doc.output('blob');
-        const pdfFileName = `Invoice_${invoice.invoiceNo}.pdf`;
-        
-        // --- SHARE VIA WHATSAPP (Requires server-side file hosting, simplified here) ---
+        // --- SHARE VIA WHATSAPP ---
         if (confirm('PDF is generated. Do you want to share a text summary via WhatsApp?')) {
             const message = `*Garage Manager PRO Invoice* (No. ${invoice.invoiceNo})\n\nDear ${invoice.clientName},\n\nYour invoice is ready. Total amount: *$${invoice.total.toFixed(2)}*.\n\nThank you for your business!`;
             const cleanedContact = clientPhone.replace(/\D/g, '');
@@ -760,21 +1000,25 @@ async function generateInvoicePDF(invoiceId, clientPhone) {
         }
 
         // --- DOWNLOAD/PRINT ---
-        doc.save(pdfFileName);
+        doc.save(`Invoice_${invoice.invoiceNo}.pdf`);
 
     } catch (error) {
         console.error("Invoice PDF/Share Error: ", error);
         alert("Failed to generate or share invoice.");
     }
 }
-function deleteInvoice(id) { alert(`Deleting invoice ${id}...`); }
+function deleteInvoice(id) { 
+    if (confirm("Are you sure you want to delete this invoice?")) {
+        invoicesRef.doc(id).delete().catch(e => console.error("Delete Error", e));
+    }
+}
 
 window.generateInvoicePDF = generateInvoicePDF;
 window.deleteInvoice = deleteInvoice;
 
 
 // =================================================================
-// 7. REPAIR QUOTES LOGIC
+// 8. REPAIR QUOTES LOGIC (Requirement 4)
 // =================================================================
 
 /**
@@ -786,9 +1030,13 @@ quoteCreationForm.addEventListener('submit', async (e) => {
 
     const items = [];
     document.querySelectorAll('#quote-items-container .quote-item-row').forEach(row => {
+        const quantity = parseFloat(row.querySelector('.quote-item-quantity').value) || 0;
+        const unitPrice = parseFloat(row.querySelector('.quote-item-amount').value) || 0;
         items.push({
             description: row.querySelector('.quote-item-desc').value,
-            amount: parseFloat(row.querySelector('.quote-item-amount').value)
+            quantity: quantity, // New field (Requirement 4)
+            unitPrice: unitPrice, // New field (Requirement 4)
+            amount: quantity * unitPrice // Total for the line item
         });
     });
 
@@ -808,7 +1056,7 @@ quoteCreationForm.addEventListener('submit', async (e) => {
         await quotesRef.add(quote);
         quoteCreationForm.reset();
         document.getElementById('quote-items-container').innerHTML = '';
-        addQuoteItemRow();
+        addQuoteItemRow(); // Add back one empty row (defined in management.html script block)
         alert('Quote generated and saved successfully!');
     } catch (error) {
         alert('Failed to save quote.');
@@ -846,7 +1094,7 @@ function listenForQuotes() {
 
 
 /**
- * Generates and shares the Repair Quote PDF.
+ * Generates and shares the Repair Quote PDF. (Requirement 4: Updated PDF table for Quantity)
  */
 async function generateQuotePDF(quoteId, clientPhone) {
     try {
@@ -873,13 +1121,18 @@ async function generateQuotePDF(quoteId, clientPhone) {
         doc.text(`Vehicle Plate: ${quote.carPlate}`, 14, 65);
 
         // Items Table
-        const itemBody = quote.items.map(item => [item.description, `$${item.amount.toFixed(2)}`]);
+        const itemBody = quote.items.map(item => [
+            item.description, 
+            item.quantity.toString(), // New column
+            `$${item.unitPrice.toFixed(2)}`, // New column (assuming data is stored as unitPrice)
+            `$${item.amount.toFixed(2)}` // Line Total
+        ]);
         
         doc.autoTable({
             startY: 75,
-            head: [['Estimated Item/Service', 'Estimated Cost ($)']],
+            head: [['Item/Service', 'Qty', 'Est. Unit Cost ($)', 'Est. Line Total ($)']], // Updated header
             body: itemBody,
-            foot: [['Estimated Total', `$${quote.total.toFixed(2)}`]],
+            foot: [['', '', 'Estimated Total', `$${quote.total.toFixed(2)}`]],
             theme: 'grid',
             styles: { fontSize: 10 },
             headStyles: { fillColor: [100, 100, 150] },
@@ -906,7 +1159,11 @@ async function generateQuotePDF(quoteId, clientPhone) {
         alert("Failed to generate or share quote.");
     }
 }
-function deleteQuote(id) { alert(`Deleting quote ${id}...`); }
+function deleteQuote(id) { 
+    if (confirm("Are you sure you want to delete this quote?")) {
+        quotesRef.doc(id).delete().catch(e => console.error("Delete Error", e));
+    }
+}
 
 window.generateQuotePDF = generateQuotePDF;
 window.deleteQuote = deleteQuote;
