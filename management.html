@@ -359,12 +359,12 @@
     
     <script>
         // Global function for dynamic rows
-       // Global functions for dynamic rows
+      // Global functions for dynamic rows
         function addInvoiceItemRow() {
             const container = document.getElementById('invoice-items-container');
             const newRow = document.createElement('div');
-            // Added 'mb-2' for vertical spacing between rows
-            newRow.className = 'flex space-x-2 item-row mb-2';
+            // IMPORTANT: Use the class 'invoice-item-row' to match management.js logic
+            newRow.className = 'flex space-x-2 item-row invoice-item-row mb-2'; 
             newRow.innerHTML = `
                 <input type="text" placeholder="Description" 
                        class="p-2 border rounded-lg w-6/12 item-desc" required/>
@@ -384,17 +384,13 @@
                 </button>
             `;
             container.appendChild(newRow);
-            // Re-attach event listeners for total calculation
-            // Note: If you still see 'attachAmountListeners is not defined', ensure management.js is loaded first.
-            if (typeof attachAmountListeners === 'function') {
-                attachAmountListeners('invoice');
-            }
+            // Removed attachAmountListeners call to prevent ReferenceError
         }
 
         function addQuoteItemRow() {
             const container = document.getElementById('quote-items-container');
             const newRow = document.createElement('div');
-            // Added 'mb-2' for vertical spacing between rows
+            // IMPORTANT: Use the class 'quote-item-row' to match management.js logic
             newRow.className = 'flex space-x-2 quote-item-row mb-2';
             newRow.innerHTML = `
                 <input type="text" placeholder="Description" 
@@ -415,11 +411,10 @@
                 </button>
             `;
             container.appendChild(newRow);
-            // Re-attach event listeners for total calculation
-            // Note: If you still see 'attachAmountListeners is not defined', ensure management.js is loaded first.
-            if (typeof attachAmountListeners === 'function') {
-                attachAmountListeners('quote');
-            }
+            // Removed attachAmountListeners call to prevent ReferenceError
+        }
+
+    // ... rest of the <script> content
         }
         
         // Initial call to add the first item row on page load (since we cleared them in previous step)
