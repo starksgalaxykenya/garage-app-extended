@@ -58,15 +58,18 @@
                 <h1 class="text-3xl font-extrabold text-white">Garage Manager PRO</h1>
                 <p class="text-sm text-blue-200">The Ultimate Auto Service Tool</p>
             </div>
-            <nav class="flex space-x-4">
-                <button id="nav-car-entry" class="text-white hover:text-blue-200 font-medium transition duration-150">New Car Entry</button>
-                <button id="nav-general-service" class="text-white hover:text-blue-200 font-medium transition duration-150">General Service</button>
-                <button id="nav-clients-list" class="text-white hover:text-blue-200 font-medium transition duration-150">All Clients</button>
-                <button id="nav-car-list" class="text-white hover:text-blue-200 font-medium transition duration-150">Active Jobs</button>
-                <button id="nav-completed-list" class="text-white hover:text-blue-200 font-medium transition duration-150">Completed Jobs</button>
-                <button id="nav-reports-section" class="text-white hover:text-blue-200 font-bold py-2 px-4 rounded-lg bg-yellow-600 hover:bg-yellow-700 transition duration-150">Reports</button>
-                <button id="logoutBtn" class="bg-red-500 hover:bg-red-600 text-white font-bold py-2 px-4 rounded transition duration-150" style="display:none;">Logout</button>
-            </nav>
+           <nav class="flex space-x-4">
+    <button id="nav-car-entry" class="text-white hover:text-blue-200 font-medium transition duration-150">New Car Entry</button>
+    <button id="nav-general-service" class="text-white hover:text-blue-200 font-medium transition duration-150">General Service</button>
+    <button id="nav-clients-list" class="text-white hover:text-blue-200 font-medium transition duration-150">All Clients</button>
+    <button id="nav-car-list" class="text-white hover:text-blue-200 font-medium transition duration-150">Active Jobs</button>
+    <button id="nav-completed-list" class="text-white hover:text-blue-200 font-medium transition duration-150">Completed Jobs</button>
+    <button id="nav-reports-section" class="text-white hover:text-blue-200 font-bold py-2 px-4 rounded-lg bg-yellow-600 hover:bg-yellow-700 transition duration-150">Reports</button>
+    
+    <button id="nav-management-console" class="text-white hover:text-blue-200 font-bold py-2 px-4 rounded-lg bg-indigo-600 hover:bg-indigo-700 transition duration-150">Enter Garage Manager</button>
+    
+    <button id="logoutBtn" class="bg-red-500 hover:bg-red-600 text-white font-bold py-2 px-4 rounded transition duration-150" style="display:none;">Logout</button>
+</nav>
         </div>
     </header>
 
@@ -2274,7 +2277,30 @@ function lookupClientDetails(section) {
                 }
             });
         }
-        
+        attachNavHandlers();
+    
+    // =================================================================
+    // NEW: Listener for the Management Console button
+    // =================================================================
+    const managementBtn = document.getElementById('nav-management-console');
+    if (managementBtn) {
+        managementBtn.addEventListener('click', () => {
+            // Check if ANY user is logged into the main app before redirecting
+            if (auth.currentUser) {
+                // Redirect to the new management app (management.html)
+                window.location.href = 'management.html';
+            } else {
+                alert("You must be logged in to access the Management Console.");
+                // Assuming 'auth-section' is the ID of your login form section
+                showSection('auth-section'); 
+            }
+        });
+    }
+    // =================================================================
+
+    // Initialize the first error code input field
+    addErrorCodeInput(); 
+// ...
         attachNavHandlers();
         
         // Initialize the first error code input field
@@ -2294,3 +2320,4 @@ function lookupClientDetails(section) {
 
 </body>
 </html>
+
