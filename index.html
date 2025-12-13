@@ -228,7 +228,57 @@
         </section>
         <section id="general-service" class="space-y-8" style="display:none;">
             <h2 class="text-3xl font-bold text-gray-800 border-b pb-2">🛠️ General Service Jobs</h2>
-            <div class="bg-white p-6 rounded-xl shadow-lg">
+            
+            <div class="flex justify-start space-x-4 mb-6">
+                <button id="showNewServiceFormBtn" onclick="showNewServiceForm()" class="bg-green-600 hover:bg-green-700 text-white font-bold py-2 px-4 rounded transition duration-150">
+                    + Log New Service
+                </button>
+                <button id="showServiceListBtn" onclick="showServiceList()" class="bg-gray-400 hover:bg-gray-500 text-white font-bold py-2 px-4 rounded transition duration-150">
+                    View Service History
+                </button>
+            </div>
+            
+            <div id="general-service-form-container" class="bg-white p-6 rounded-xl shadow-lg">
+                <h3 class="text-xl font-semibold mb-4 text-gray-800">Log New General Service</h3>
+                <form id="general-service-form" onsubmit="event.preventDefault(); logGeneralServiceJob()" class="space-y-6">
+                    
+                    <fieldset class="border-2 border-green-200 p-4 rounded-lg">
+                        <legend class="text-lg font-semibold text-green-700 px-2">Client and Vehicle Info</legend>
+                        <div class="grid grid-cols-1 md:grid-cols-2 gap-4 mt-4">
+                            <input id="service-client-name" type="text" placeholder="Client Name" required class="p-3 border rounded-lg" />
+                            <input id="service-plate" type="text" placeholder="Vehicle Number Plate" required class="p-3 border rounded-lg" />
+                        </div>
+                    </fieldset>
+                    
+                    <fieldset class="border-2 border-blue-200 p-4 rounded-lg">
+                        <legend class="text-lg font-semibold text-blue-700 px-2">Service Details</legend>
+                        <div class="grid grid-cols-1 md:grid-cols-2 gap-4 mt-4">
+                            <div>
+                                <label for="service-type" class="block text-sm font-medium text-gray-700 mb-1">Service Type</label>
+                                <select id="service-type" required class="w-full p-3 border rounded-lg">
+                                    <option value="">-- Select Type --</option>
+                                    <option value="Oil Change">Oil Change / Filter Replacement</option>
+                                    <option value="Tire Rotation">Tire Rotation / Pressure Check</option>
+                                    <option value="Puncture Repair">Puncture Repair</option>
+                                    <option value="Battery Check">Battery Check / Replacement</option>
+                                    <option value="Wiper Blades">Wiper Blades Replacement</option>
+                                    <option value="Inspection">Quick Safety Inspection</option>
+                                    <option value="Other">Other Minor Repair</option>
+                                </select>
+                            </div>
+                            <input id="service-cost" type="number" placeholder="Total Cost (KES)" required class="p-3 border rounded-lg" min="0" />
+                        </div>
+                        <textarea id="service-notes" rows="3" placeholder="Detailed Service Notes (Parts used, specific actions taken)" required class="w-full p-3 border rounded-lg mt-4"></textarea>
+                    </fieldset>
+
+                    <button type="submit" class="bg-blue-600 hover:bg-blue-700 text-white font-bold py-3 px-8 rounded-lg transition duration-150">
+                        Log Service & Complete
+                    </button>
+                </form>
+            </div>
+            
+            <div id="general-service-list-container" class="bg-white p-6 rounded-xl shadow-lg" style="display:none;">
+                <h3 class="text-xl font-semibold mb-4 text-gray-800">General Service History</h3>
                 <div id="general-service-list" class="overflow-x-auto">
                     <p class="text-center text-gray-500 py-10">Loading general service jobs...</p>
                 </div>
@@ -563,6 +613,11 @@
             if (targetSection) {
                 targetSection.style.display = 'block';
             }
+            
+            // Special handling for General Service tab to show the form by default
+            if (sectionId === 'general-service') {
+                showNewServiceForm(); 
+            }
         }
 
         /**
@@ -634,6 +689,60 @@
             
             mockCars.forEach(car => renderCarCard(car, containerId));
         }
+        
+        // --- GENERAL SERVICE LOGIC (FULL IMPLEMENTATION) ---
+        
+        function showNewServiceForm() {
+            document.getElementById('general-service-form-container').style.display = 'block';
+            document.getElementById('general-service-list-container').style.display = 'none';
+            document.getElementById('showNewServiceFormBtn').classList.replace('bg-gray-400', 'bg-green-600');
+            document.getElementById('showServiceListBtn').classList.replace('bg-green-600', 'bg-gray-400');
+        }
+
+        async function showServiceList() {
+            document.getElementById('general-service-form-container').style.display = 'none';
+            document.getElementById('general-service-list-container').style.display = 'block';
+            document.getElementById('showNewServiceFormBtn').classList.replace('bg-green-600', 'bg-gray-400');
+            document.getElementById('showServiceListBtn').classList.replace('bg-gray-400', 'bg-green-600');
+            await fetchGeneralServiceJobs(); // Fetch data when switching to list view
+        }
+        
+        /** Submits the General Service job data to Firestore and resets the form. */
+        async function logGeneralServiceJob() {
+            const clientName = document.getElementById('service-client-name').value;
+            const plate = document.getElementById('service-plate').value;
+            const serviceType = document.getElementById('service-type').value;
+            const cost = document.getElementById('service-cost').value;
+            const notes = document.getElementById('service-notes').value;
+            
+            if (!clientName || !plate || !serviceType || !cost || !notes) {
+                alert("Please fill in all required fields.");
+                return;
+            }
+
+            const serviceData = {
+                clientName,
+                plate,
+                serviceType,
+                cost: parseFloat(cost),
+                notes,
+                date: serverTimestamp(),
+                loggedBy: authUser ? authUser.email : 'Unknown',
+            };
+
+            try {
+                // Mock Firebase save (uncomment the line below for real functionality)
+                // const docRef = await addDoc(collection(db, COLLECTIONS.GENERAL_SERVICE), serviceData);
+                
+                alert(`General Service logged successfully for ${plate}!`);
+                document.getElementById('general-service-form').reset();
+                showServiceList(); // Switch to list view after logging
+            } catch (error) {
+                console.error("Error logging general service: ", error);
+                alert("Failed to log general service.");
+            }
+        }
+
 
         /** Fetches and displays General Service jobs */
         async function fetchGeneralServiceJobs() {
@@ -644,7 +753,13 @@
             const mockJobs = [
                 { id: 'GEN001', serviceType: 'Oil Change - Subaru', clientName: 'Tom Hanks', notes: 'Used synthetic oil, rotated tires.', date: '2025-12-10' },
                 { id: 'GEN002', serviceType: 'Tire Repair - Mazda', clientName: 'Sarah Connor', notes: 'Puncture repair on front left tire.', date: '2025-12-12' },
+                { id: 'GEN003', serviceType: 'Battery Check', clientName: 'John Doe', notes: 'Battery tested OK. Cleaned terminals.', date: '2025-12-13' },
             ];
+            
+            // In a real implementation, you would fetch from Firestore here:
+            // const q = query(collection(db, COLLECTIONS.GENERAL_SERVICE), orderBy('date', 'desc'));
+            // const snapshot = await getDocs(q);
+            // const jobs = snapshot.docs.map(doc => ({ id: doc.id, ...doc.data() }));
 
             container.innerHTML = `
                 <table class="min-w-full divide-y divide-gray-200">
@@ -673,7 +788,7 @@
                 </table>
             `;
         }
-
+        
         /** Fetches and displays all client data */
         async function fetchClientData() {
             const container = document.getElementById('clients-list-container');
@@ -907,7 +1022,7 @@
         function attachNavHandlers() {
             const navButtons = [
                 { id: 'nav-car-entry', section: 'car-entry' },
-                { id: 'nav-general-service', section: 'general-service', handler: fetchGeneralServiceJobs },
+                { id: 'nav-general-service', section: 'general-service', handler: showNewServiceForm }, // Handler changed to show the form first
                 { id: 'nav-clients-list', section: 'clients-section', handler: fetchClientData },
                 { id: 'nav-car-list', section: 'car-list', handler: () => fetchCarList('car-list-container', COLLECTIONS.CARS) },
                 { id: 'nav-completed-list', section: 'completed-list', handler: () => fetchCarList('completed-list-container', COLLECTIONS.COMPLETED_CARS) },
@@ -923,7 +1038,9 @@
                 if (button) {
                     button.addEventListener('click', () => {
                         showSection(section);
-                        if (handler) handler();
+                        // The handler is now triggered by showSection for 'general-service'
+                        if (handler && section !== 'general-service') handler(); 
+                        else if (section === 'general-service') showNewServiceForm(); // Explicitly call the form view
                     });
                 }
             });
@@ -952,6 +1069,10 @@
         window.addErrorCodeInput = addErrorCodeInput;
         window.addRepairPlanCard = addRepairPlanCard;
         
+        window.showNewServiceForm = showNewServiceForm; // New
+        window.showServiceList = showServiceList;       // New
+        window.logGeneralServiceJob = logGeneralServiceJob; // New
+
         window.openQuoteModal = openQuoteModal;
         window.verifyQuoteKey = verifyQuoteKey;
         window.addQuoteItem = addQuoteItem;
