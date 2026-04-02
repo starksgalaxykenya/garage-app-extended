@@ -397,10 +397,45 @@
 
 <script type="module">
 
+    // ========== SECURITY & UTILITY HELPERS ==========
+// Escape HTML to prevent XSS
+function escapeHtml(str) {
+    if (!str) return '';
+    return str.replace(/[&<>]/g, function(m) {
+        if (m === '&') return '&amp;';
+        if (m === '<') return '&lt;';
+        if (m === '>') return '&gt;';
+        return m;
+    });
+}
+
+// Standardize phone number cleaning for WhatsApp
+function cleanPhoneNumber(phone) {
+    let cleaned = phone.replace(/[^\d+]/g, '');
+    if (!cleaned.startsWith('+')) {
+        cleaned = cleaned.replace(/\D/g, '');
+    }
+    return cleaned;
+}
+
+// Debounce flag storage for form submissions
+let isSavingCar = false;
+let isSavingService = false;
+let isSavingClient = false;
+
     // NEW: Import the local error code dictionary
-    import { ERROR_CODE_LOOKUP } from "./error_codes_dictionary.js";
-    // MODIFICATION 2: Expose dictionary globally for functions called via onclick to access
-    window.GLOBAL_ERROR_CODE_LOOKUP = ERROR_CODE_LOOKUP; 
+   // ========== ERROR CODE DICTIONARY (with safe fallback) ==========
+let ERROR_CODE_LOOKUP = {};
+import("./error_codes_dictionary.js")
+    .then(module => {
+        ERROR_CODE_LOOKUP = module.ERROR_CODE_LOOKUP;
+        window.GLOBAL_ERROR_CODE_LOOKUP = ERROR_CODE_LOOKUP;
+        console.log("✅ Error code dictionary loaded successfully.");
+    })
+    .catch(e => {
+        console.warn("⚠️ Error code dictionary not found, using empty fallback.", e);
+        window.GLOBAL_ERROR_CODE_LOOKUP = {};
+    });
     
     // ----------------------------------------------------------------------
     // 1. FIREBASE INITIALIZATION & CONFIGURATION (MODULAR)
@@ -483,24 +518,39 @@
     // 2. AUTHENTICATION LOGIC
     // ----------------------------------------------------------------------
 
-    onAuthStateChanged(auth, (user) => {
-        const headerNav = document.querySelector('header nav');
-        if (user) {
-            currentUserRole = getMockRole(user.email);
-            document.getElementById('logoutBtn').style.display = 'block';
-            headerNav.style.display = 'flex';
-            // NEW: Start listening to clients and cars immediately after login
-            listenForClients();
-            listenForCarsForCache(); 
-            // Redirect to active jobs list
-            showSection('car-list');
-        } else {
-            // Logged out
-            document.getElementById('logoutBtn').style.display = 'none';
-            headerNav.style.display = 'none'; // Hide nav bar when logged out
-            showSection('auth-section');
-        }
-    });
+    let unsubscribeClients = null;
+let unsubscribeCarsCache = null;
+let unsubscribeActiveJobs = null;
+let unsubscribeCompletedJobs = null;
+
+onAuthStateChanged(auth, (user) => {
+    const headerNav = document.querySelector('header nav');
+    if (user) {
+        currentUserRole = getMockRole(user.email);
+        document.getElementById('logoutBtn').style.display = 'block';
+        headerNav.style.display = 'flex';
+        
+        // Unsubscribe previous listeners if any
+        if (unsubscribeClients) unsubscribeClients();
+        if (unsubscribeCarsCache) unsubscribeCarsCache();
+        
+        // Start new listeners and store unsubscribes
+        unsubscribeClients = listenForClients();
+        unsubscribeCarsCache = listenForCarsForCache();
+        
+        showSection('car-list');
+    } else {
+        // Clean up all listeners on logout
+        if (unsubscribeClients) unsubscribeClients();
+        if (unsubscribeCarsCache) unsubscribeCarsCache();
+        if (unsubscribeActiveJobs) unsubscribeActiveJobs();
+        if (unsubscribeCompletedJobs) unsubscribeCompletedJobs();
+        
+        document.getElementById('logoutBtn').style.display = 'none';
+        headerNav.style.display = 'none';
+        showSection('auth-section');
+    }
+});
 
     function showSection(sectionId) {
         // MODIFICATION: Added 'reports-section' and 'clients-section'
@@ -566,7 +616,11 @@
 
     // Function to save new car entry
     async function saveCarEntry(event) {
-        event.preventDefault();
+    event.preventDefault();
+    if (isSavingCar) return;
+    isSavingCar = true;
+    
+    try {
         if (!auth.currentUser) {
             alert("You must be logged in to save an entry.");
             return;
@@ -637,77 +691,79 @@
             addErrorCodeInput(); // Re-initialize the first one
             addRepairPlanCard('Full diagnostic and repair of error codes.', ''); // Re-initialize the first one
             showSection('car-list'); // Go to the list view
-        } catch (error) {
-            console.error("Error adding document: ", error);
-            alert("Could not save vehicle entry.");
-        }
+            } catch (error) {
+        console.error("Error in saveCarEntry: ", error);
+        alert("Could not save vehicle entry.");
+    } finally {
+        isSavingCar = false;
     }
+}
 
     document.getElementById('car-entry-form').addEventListener('submit', saveCarEntry);
 
     // Function to fetch and display cars based on status
     function fetchCars(status) {
-        const container = document.getElementById(status === 'Active' ? 'car-list-container' : 'completed-list-container');
-        container.innerHTML = `<p class="text-center text-xl text-blue-500 py-10">Loading ${status.toLowerCase()} jobs...</p>`;
+    const container = document.getElementById(status === 'Active' ? 'car-list-container' : 'completed-list-container');
+    container.innerHTML = `<p class="text-center text-xl text-blue-500 py-10">Loading ${status.toLowerCase()} jobs...</p>`;
 
-        // Only fetch documents with the specified status
-        const carsQuery = query(carsCollection, where('status', '==', status), orderBy('createdAt', 'desc'));
+    const carsQuery = query(carsCollection, where('status', '==', status), orderBy('createdAt', 'desc'));
 
-        // Listen for real-time updates
-        onSnapshot(carsQuery, (snapshot) => {
-            container.innerHTML = '';
-            const allCars = snapshot.docs.map(doc => ({...doc.data(), id: doc.id}));
-            
-            // Cache completed jobs for the reports section
-            if (status === 'Completed') {
-                completedJobsCache = allCars; 
-            }
-            
-            if (allCars.length === 0) {
-                container.innerHTML = `<p class="text-center text-xl text-gray-500 py-10">No ${status} jobs found.</p>`;
-                return;
-            }
-
-            allCars.forEach(car => {
-                const card = createCarCard(car, status);
-                container.appendChild(card);
-            });
-        }, (error) => {
-            console.error("Error fetching cars: ", error);
-            container.innerHTML = `<p class="text-center text-xl text-red-500 py-10">Error loading jobs: ${error.message}</p>`;
+    const unsubscribe = onSnapshot(carsQuery, (snapshot) => {
+        container.innerHTML = '';
+        const allCars = snapshot.docs.map(doc => ({...doc.data(), id: doc.id}));
+        if (status === 'Completed') completedJobsCache = allCars;
+        
+        if (allCars.length === 0) {
+            container.innerHTML = `<p class="text-center text-xl text-gray-500 py-10">No ${status} jobs found.</p>`;
+            return;
+        }
+        allCars.forEach(car => {
+            const card = createCarCard(car, status);
+            container.appendChild(card);
         });
+    }, (error) => {
+        console.error("Error fetching cars: ", error);
+        container.innerHTML = `<p class="text-center text-xl text-red-500 py-10">Error loading jobs: ${error.message}</p>`;
+    });
+
+    if (status === 'Active') {
+        if (unsubscribeActiveJobs) unsubscribeActiveJobs();
+        unsubscribeActiveJobs = unsubscribe;
+    } else {
+        if (unsubscribeCompletedJobs) unsubscribeCompletedJobs();
+        unsubscribeCompletedJobs = unsubscribe;
     }
+}
 
     // Creates the HTML card for a car entry (MODIFIED: Added Plate to card)
     function createCarCard(car, status) {
-        const card = document.createElement('div');
-        const borderColor = car.jobType === 'GeneralService' ? 'border-green-500' : 'border-blue-500';
-        const jobTypeLabel = car.jobType === 'GeneralService' ? '<span class="text-xs font-semibold bg-green-100 text-green-800 px-2 py-0.5 rounded">G. Service</span>' : '';
-        card.className = `bg-white p-6 rounded-xl shadow-lg border-t-4 ${borderColor} hover:shadow-xl transition duration-200`;
+    const card = document.createElement('div');
+    const borderColor = car.jobType === 'GeneralService' ? 'border-green-500' : 'border-blue-500';
+    const jobTypeLabel = car.jobType === 'GeneralService' ? '<span class="text-xs font-semibold bg-green-100 text-green-800 px-2 py-0.5 rounded">G. Service</span>' : '';
+    card.className = `bg-white p-6 rounded-xl shadow-lg border-t-4 ${borderColor} hover:shadow-xl transition duration-200`;
 
-        const actions = status === 'Active' ? 
-            `<button onclick="markCarAsCompleted('${car.id}')" class="bg-green-500 hover:bg-green-600 text-white font-bold py-2 px-4 rounded transition duration-150 text-sm">Mark Complete</button>` :
-            `<button onclick="deleteCompletedCar('${car.id}')" class="bg-red-500 hover:bg-red-600 text-white font-bold py-2 px-4 rounded transition duration-150 text-sm">Delete History</button>`;
-            
-        const viewReportBtn = `<button onclick="openDetailedReport('${car.id}')" class="bg-blue-500 hover:bg-blue-600 text-white font-bold py-2 px-4 rounded transition duration-150 text-sm">View Report</button>`;
+    const actions = status === 'Active' ? 
+        `<button onclick="markCarAsCompleted('${car.id}')" class="bg-green-500 hover:bg-green-600 text-white font-bold py-2 px-4 rounded transition duration-150 text-sm">Mark Complete</button>` :
+        `<button onclick="deleteCompletedCar('${car.id}')" class="bg-red-500 hover:bg-red-600 text-white font-bold py-2 px-4 rounded transition duration-150 text-sm">Delete History</button>`;
+        
+    const viewReportBtn = `<button onclick="openDetailedReport('${car.id}')" class="bg-blue-500 hover:bg-blue-600 text-white font-bold py-2 px-4 rounded transition duration-150 text-sm">View Report</button>`;
 
-        card.innerHTML = `
-            <div class="flex justify-between items-start mb-4">
-                <h3 class="text-2xl font-bold text-gray-900">${car.plate}</h3>
-                ${jobTypeLabel}
-            </div>
-            <p class="text-gray-700 font-semibold mb-1">${car.make} ${car.model} (${car.year || 'N/A'})</p>
-            <p class="text-sm text-gray-600">Client: ${car.clientName} (${car.clientPhone})</p>
-            <p class="text-sm text-gray-600">Mechanic: ${car.assignedMechanic}</p>
-            <p class="text-sm text-gray-600 mb-4">Due: ${car.deliveryDate}</p>
-            <div class="flex space-x-2">
-                ${actions}
-                ${viewReportBtn}
-            </div>
-        `;
-        return card;
-    }
-
+    card.innerHTML = `
+        <div class="flex justify-between items-start mb-4">
+            <h3 class="text-2xl font-bold text-gray-900">${escapeHtml(car.plate)}</h3>
+            ${jobTypeLabel}
+        </div>
+        <p class="text-gray-700 font-semibold mb-1">${escapeHtml(car.make)} ${escapeHtml(car.model)} (${escapeHtml(car.year || 'N/A')})</p>
+        <p class="text-sm text-gray-600">Client: ${escapeHtml(car.clientName)} (${escapeHtml(car.clientPhone)})</p>
+        <p class="text-sm text-gray-600">Mechanic: ${escapeHtml(car.assignedMechanic)}</p>
+        <p class="text-sm text-gray-600 mb-4">Due: ${escapeHtml(car.deliveryDate)}</p>
+        <div class="flex space-x-2">
+            ${actions}
+            ${viewReportBtn}
+        </div>
+    `;
+    return card;
+}
     // Function to mark a car as completed
     async function markCarAsCompleted(carId) {
         if (!confirm("Confirm to mark this job as completed? This will move it to history.")) return;
@@ -776,54 +832,62 @@
      * Listens to the 'cars' collection and builds the clientCarsCache.
      * This is needed to show a client's vehicles in the client list section and for autofill.
      */
-    function listenForCarsForCache() {
-        // Query for all cars, active or completed, only need plate, make, model, and clientPhone
-        const allCarsQuery = query(carsCollection, orderBy('createdAt', 'desc')); 
-        
-        onSnapshot(allCarsQuery, (snapshot) => {
-            clientCarsCache = {}; // Reset cache
-            snapshot.docs.forEach(doc => {
-                const car = doc.data();
-                const clientPhone = car.clientPhone;
-                
-                if (clientPhone) {
-                    if (!clientCarsCache[clientPhone]) {
-                        clientCarsCache[clientPhone] = [];
-                    }
-                    // Store full car data for autofill and detailed vehicle list
-                    clientCarsCache[clientPhone].push({
-                        plate: car.plate,
-                        make: car.make,
-                        model: car.model,
-                        vin: car.vin || 'N/A',
-                        status: car.status,
-                        jobType: car.jobType,
-                        year: car.year || 'N/A',
-                        color: car.color || 'N/A',
-                        engineCC: car.engineCC || 'N/A',
-                        trim: car.trim || 'N/A',
-                        engineName: car.engineName || 'N/A',
-                        transmission: car.transmission || 'Automatic',
-                        driveType: car.driveType || 'FWD'
-                    });
+    let unsubscribeCarsCache = null;
+
+function listenForCarsForCache() {
+    if (unsubscribeCarsCache) unsubscribeCarsCache(); // clean previous
+    
+    const allCarsQuery = query(carsCollection, orderBy('createdAt', 'desc'), limit(200));
+    unsubscribeCarsCache = onSnapshot(allCarsQuery, (snapshot) => {
+        clientCarsCache = {};
+        snapshot.docs.forEach(doc => {
+            const car = doc.data();
+            const clientPhone = car.clientPhone;
+            if (clientPhone) {
+                if (!clientCarsCache[clientPhone]) {
+                    clientCarsCache[clientPhone] = [];
                 }
-            });
-            
-            // If the clients section is visible, re-render the list to update car count
-            if (document.getElementById('clients-section').style.display === 'block') {
-                renderClientList(clientCache);
+                clientCarsCache[clientPhone].push({
+                    plate: car.plate,
+                    make: car.make,
+                    model: car.model,
+                    vin: car.vin || 'N/A',
+                    status: car.status,
+                    jobType: car.jobType,
+                    year: car.year || 'N/A',
+                    color: car.color || 'N/A',
+                    engineCC: car.engineCC || 'N/A',
+                    trim: car.trim || 'N/A',
+                    engineName: car.engineName || 'N/A',
+                    transmission: car.transmission || 'Automatic',
+                    driveType: car.driveType || 'FWD'
+                });
             }
-        }, (error) => {
-            console.error("Error listening to cars for client cache: ", error);
         });
-    }
+        if (document.getElementById('clients-section').style.display === 'block') {
+            renderClientList(clientCache);
+        }
+    }, (error) => {
+        console.error("Error listening to cars for client cache: ", error);
+    });
+    
+    return unsubscribeCarsCache;
+}
 
 
     /**
      * Saves a new client entry to Firestore.
      */
     async function saveNewClient(event) {
-        event.preventDefault();
+          event.preventDefault();
+    if (isSavingClient) return;
+    isSavingClient = true;
+    
+    try {
+        if (!auth.currentUser) {
+            alert("You must be logged in to save an entry.");
+            return;
+        }
         const msgEl = document.getElementById('client-save-message');
         msgEl.textContent = 'Saving...';
         msgEl.className = 'text-blue-500 text-sm mt-2';
@@ -850,12 +914,13 @@
             msgEl.textContent = '✅ Client successfully registered!';
             msgEl.className = 'text-green-500 text-sm mt-2';
             document.getElementById('create-client-form').reset();
-        } catch (error) {
-            console.error("Error saving new client: ", error);
-            msgEl.textContent = `Error: Could not save client. ${error.message}`;
-            msgEl.className = 'text-red-500 text-sm mt-2';
-        }
+         } catch (error) {
+        console.error("Error in saveCarEntry: ", error);
+        alert("Could not save vehicle entry.");
+    } finally {
+        isSavingClient = false;
     }
+}
 
     /**
      * Renders the list of clients in the clients-section.
@@ -1304,141 +1369,126 @@ function lookupClientDetails(section) {
     }
 
     function renderJobCardContent(data, status) {
-        window.currentJobCardData = data; // FIX: Set the global data on the window object for PDF/WhatsApp generation
-        const jobCardContent = document.getElementById('job-card-content');
-        const dialogEl = document.getElementById('job-card-dialog');
-        const widthClasses = ['max-w-3xl', 'max-w-xl']; 
-        dialogEl.classList.remove(...widthClasses);
+    window.currentJobCardData = data;
+    const jobCardContent = document.getElementById('job-card-content');
+    const dialogEl = document.getElementById('job-card-dialog');
+    dialogEl.classList.remove('max-w-3xl', 'max-w-xl');
 
-        // MODIFICATION 5 FIX: Handle General Service Job Type
-        if (data.jobType === 'GeneralService') {
-            dialogEl.classList.add('max-w-xl');
-            // Simplified display for General Service
-            jobCardContent.innerHTML = `
-                <div class="text-center border-b pb-4 mb-4">
-                    <h2 class="text-3xl font-bold text-green-800">General Service Completion Report</h2>
-                    <p class="text-sm text-gray-600">Generated on: ${new Date().toLocaleDateString()}</p>
-                </div>
-                <div class="grid grid-cols-2 gap-4 border-b pb-4">
-                    <div><p><span class="font-bold">Client:</span> ${data.clientName}</p></div>
-                    <div><p><span class="font-bold">Phone:</span> ${data.clientPhone}</p></div>
-                    <div><p><span class="font-bold">Vehicle:</span> ${data.make} ${data.model} (${data.plate})</p></div>
-                    <div><p><span class="font-bold">Service By:</span> ${data.servicePerson || 'N/A'}</p></div>
-                </div>
-                <h3 class="text-xl font-bold text-green-700 mt-4 border-b-2 pb-1">Service Summary</h3>
-                <p class="mt-2 whitespace-pre-wrap">${data.diagnosticNotes}</p>
-                
-                <h3 class="text-xl font-bold text-blue-700 mt-4 border-b-2 pb-1">Mileage & Next Service</h3>
-                <p class="mt-2"><span class="font-bold">Current:</span> ${data.currentMileage} KM</p>
-                <p><span class="font-bold">Next Service Est.:</span> ${data.nextServiceMileage} KM</p>
-                <p class="text-sm italic text-gray-500 mt-4">For detailed checklist, please generate the Service Report PDF.</p>
-            `;
-            // Hide the WhatsApp button for service jobs (too much detail to send)
-            document.getElementById('whatsapp-btn').style.display = 'none';
+    if (data.jobType === 'GeneralService') {
+        dialogEl.classList.add('max-w-xl');
+        jobCardContent.innerHTML = `
+            <div class="text-center border-b pb-4 mb-4">
+                <h2 class="text-3xl font-bold text-green-800">General Service Completion Report</h2>
+                <p class="text-sm text-gray-600">Generated on: ${new Date().toLocaleDateString()}</p>
+            </div>
+            <div class="grid grid-cols-2 gap-4 border-b pb-4">
+                <div><p><span class="font-bold">Client:</span> ${escapeHtml(data.clientName)}</p></div>
+                <div><p><span class="font-bold">Phone:</span> ${escapeHtml(data.clientPhone)}</p></div>
+                <div><p><span class="font-bold">Vehicle:</span> ${escapeHtml(data.make)} ${escapeHtml(data.model)} (${escapeHtml(data.plate)})</p></div>
+                <div><p><span class="font-bold">Service By:</span> ${escapeHtml(data.servicePerson || 'N/A')}</p></div>
+            </div>
+            <h3 class="text-xl font-bold text-green-700 mt-4 border-b-2 pb-1">Service Summary</h3>
+            <p class="mt-2 whitespace-pre-wrap">${escapeHtml(data.diagnosticNotes)}</p>
+            <h3 class="text-xl font-bold text-blue-700 mt-4 border-b-2 pb-1">Mileage & Next Service</h3>
+            <p class="mt-2"><span class="font-bold">Current:</span> ${escapeHtml(data.currentMileage)} KM</p>
+            <p><span class="font-bold">Next Service Est.:</span> ${escapeHtml(data.nextServiceMileage)} KM</p>
+            <p class="text-sm italic text-gray-500 mt-4">For detailed checklist, please generate the Service Report PDF.</p>
+        `;
+        document.getElementById('whatsapp-btn').style.display = 'none';
+    } else {
+        dialogEl.classList.add('max-w-3xl');
+        const repairPlanHtml = data.repairPlanItems && data.repairPlanItems.length > 0 ? 
+            `<div class="space-y-3">
+                ${data.repairPlanItems.map((item, index) => `
+                    <div class="p-3 border border-pink-300 bg-pink-50 rounded-lg shadow-sm">
+                        <p class="font-bold text-pink-700">Action Item ${index + 1}:</p>
+                        <p class="whitespace-pre-wrap">${escapeHtml(item.action)}</p>
+                        ${item.parts ? `<p class="mt-2 text-sm"><span class="font-semibold">Parts:</span> ${escapeHtml(item.parts)}</p>` : ''}
+                    </div>
+                `).join('')}
+            </div>` 
+            : '<p class="text-gray-500">No repair plan items specified.</p>';
 
-        } else {
-            // Standard Repair/Check-in Job Card
-            dialogEl.classList.add('max-w-3xl');
-            
-            const repairPlanHtml = data.repairPlanItems && data.repairPlanItems.length > 0 ? 
-                `<div class="space-y-3">
-                    ${data.repairPlanItems.map((item, index) => `
-                        <div class="p-3 border border-pink-300 bg-pink-50 rounded-lg shadow-sm">
-                            <p class="font-bold text-pink-700">Action Item ${index + 1}:</p>
-                            <p class="whitespace-pre-wrap">${item.action}</p>
-                            ${item.parts ? `<p class="mt-2 text-sm"><span class="font-semibold">Parts:</span> ${item.parts}</p>` : ''}
-                        </div>
-                    `).join('')}
-                </div>` 
-                : '<p class="text-gray-500">No repair plan items specified.</p>';
-
-            jobCardContent.innerHTML = `
-                <div class="grid grid-cols-2 gap-4 border-b pb-4">
-                    <div><p><span class="font-bold">Client:</span> ${data.clientName}</p></div>
-                    <div><p><span class="font-bold">Phone:</span> ${data.clientPhone}</p></div>
-                    <div><p><span class="font-bold">Email:</span> ${data.clientEmail || 'N/A'}</p></div>
-                </div>
-                <h3 class="text-xl font-bold text-blue-700 mt-4 border-b-2 pb-1">Vehicle Details</h3>
-                <div class="grid grid-cols-3 gap-4">
-                    <p><span class="font-bold">Plate No:</span> ${data.plate}</p>
-                    <p><span class="font-bold">Make:</span> ${data.make}</p>
-                    <p><span class="font-bold">Model:</span> ${data.model}</p>
-                    <p><span class="font-bold">Year:</span> ${data.year}</p>
-                    <p><span class="font-bold">VIN:</span> ${data.vin}</p>
-                    <p><span class="font-bold">Color:</span> ${data.color || 'N/A'}</p>
-                    <p><span class="font-bold">Trans:</span> ${data.transmission || 'N/A'}</p>
-                    <p><span class="font-bold">Drive:</span> ${data.driveType || 'N/A'}</p>
-                </div>
-
-                <h3 class="text-xl font-bold text-red-700 mt-4 border-b-2 pb-1">Reported Problem & Diagnosis</h3>
-                <p class="mt-2"><span class="font-bold">Reported Problem:</span> <span class="whitespace-pre-wrap">${data.reportedProblems}</span></p>
-                <p class="mt-2"><span class="font-bold">Diagnostic Notes:</span> <span class="whitespace-pre-wrap">${data.diagnosticNotes}</span></p>
-                
-                <h3 class="text-xl font-bold text-pink-700 mt-4 border-b-2 pb-1">Repair Plan & Parts</h3>
-                ${repairPlanHtml}
-
-                <h3 class="text-xl font-bold text-indigo-700 mt-4 border-b-2 pb-1">Job Status & Schedule</h3>
-                <p class="mt-2"><span class="font-bold">Status:</span> <span class="font-extrabold text-${status === 'Active' ? 'orange' : 'green'}-600">${status}</span></p>
-                <p><span class="font-bold">Assigned Mechanic:</span> ${data.assignedMechanic}</p>
-                <p><span class="font-bold">Est. Delivery:</span> ${data.deliveryDate}</p>
-
-                <h3 class="text-xl font-bold text-yellow-700 mt-4 border-b-2 pb-1">Error Codes</h3>
-                <div class="mt-2 p-3 bg-yellow-50 rounded-lg whitespace-pre-wrap text-sm">${data.errorMeanings || 'No codes recorded.'}</div>
-            `;
-            // Show the WhatsApp button for standard jobs
-            document.getElementById('whatsapp-btn').style.display = 'inline-block';
-        }
+        jobCardContent.innerHTML = `
+            <div class="grid grid-cols-2 gap-4 border-b pb-4">
+                <div><p><span class="font-bold">Client:</span> ${escapeHtml(data.clientName)}</p></div>
+                <div><p><span class="font-bold">Phone:</span> ${escapeHtml(data.clientPhone)}</p></div>
+                <div><p><span class="font-bold">Email:</span> ${escapeHtml(data.clientEmail || 'N/A')}</p></div>
+            </div>
+            <h3 class="text-xl font-bold text-blue-700 mt-4 border-b-2 pb-1">Vehicle Details</h3>
+            <div class="grid grid-cols-3 gap-4">
+                <p><span class="font-bold">Plate No:</span> ${escapeHtml(data.plate)}</p>
+                <p><span class="font-bold">Make:</span> ${escapeHtml(data.make)}</p>
+                <p><span class="font-bold">Model:</span> ${escapeHtml(data.model)}</p>
+                <p><span class="font-bold">Year:</span> ${escapeHtml(data.year)}</p>
+                <p><span class="font-bold">VIN:</span> ${escapeHtml(data.vin)}</p>
+                <p><span class="font-bold">Color:</span> ${escapeHtml(data.color || 'N/A')}</p>
+                <p><span class="font-bold">Trans:</span> ${escapeHtml(data.transmission || 'N/A')}</p>
+                <p><span class="font-bold">Drive:</span> ${escapeHtml(data.driveType || 'N/A')}</p>
+            </div>
+            <h3 class="text-xl font-bold text-red-700 mt-4 border-b-2 pb-1">Reported Problem & Diagnosis</h3>
+            <p class="mt-2"><span class="font-bold">Reported Problem:</span> <span class="whitespace-pre-wrap">${escapeHtml(data.reportedProblems)}</span></p>
+            <p class="mt-2"><span class="font-bold">Diagnostic Notes:</span> <span class="whitespace-pre-wrap">${escapeHtml(data.diagnosticNotes)}</span></p>
+            <h3 class="text-xl font-bold text-pink-700 mt-4 border-b-2 pb-1">Repair Plan & Parts</h3>
+            ${repairPlanHtml}
+            <h3 class="text-xl font-bold text-indigo-700 mt-4 border-b-2 pb-1">Job Status & Schedule</h3>
+            <p class="mt-2"><span class="font-bold">Status:</span> <span class="font-extrabold text-${status === 'Active' ? 'orange' : 'green'}-600">${escapeHtml(status)}</span></p>
+            <p><span class="font-bold">Assigned Mechanic:</span> ${escapeHtml(data.assignedMechanic)}</p>
+            <p><span class="font-bold">Est. Delivery:</span> ${escapeHtml(data.deliveryDate)}</p>
+            <h3 class="text-xl font-bold text-yellow-700 mt-4 border-b-2 pb-1">Error Codes</h3>
+            <div class="mt-2 p-3 bg-yellow-50 rounded-lg whitespace-pre-wrap text-sm">${escapeHtml(data.errorMeanings || 'No codes recorded.')}</div>
+        `;
+        document.getElementById('whatsapp-btn').style.display = 'inline-block';
     }
+}
 
     // Function to send job card via WhatsApp
     function sendJobCardViaWhatsApp() {
-        const data = window.currentJobCardData;
-        if (!data) {
-            alert("No job card data loaded.");
-            return;
-        }
-
-        const clientPhone = data.clientPhone.replace(/[^0-9+]/g, ''); 
-        
-        let message = `*Garage Manager PRO Job Report*\n\n`;
-        message += `*Client*: ${data.clientName}\n`;
-        message += `*Vehicle*: ${data.make} ${data.model} (${data.plate})\n`;
-        message += `*Job Type*: ${data.jobType === 'GeneralService' ? 'General Service' : 'Standard Repair'}\n\n`;
-
-        if (data.jobType === 'GeneralService') {
-            message += `*Service Notes*:\n${data.diagnosticNotes}\n`;
-            message += `*Current Mileage*: ${data.currentMileage} KM\n`;
-            message += `*Next Service Est.*: ${data.nextServiceMileage} KM\n\n`;
-            message += `_For detailed checklist, please refer to the Service Report PDF._`;
-        } else {
-            // Standard Repair/Check-in
-            message += `*Status*: ${data.status}\n`;
-            message += `*Mechanic*: ${data.assignedMechanic}\n`;
-            message += `*Est. Delivery*: ${data.deliveryDate}\n\n`;
-            
-            message += `*Reported Problem*:\n${data.reportedProblems}\n\n`;
-            message += `*Diagnostic Notes*:\n${data.diagnosticNotes}\n\n`;
-            
-            message += `*Repair Plan*:\n`;
-            if (data.repairPlanItems && data.repairPlanItems.length > 0) {
-                data.repairPlanItems.forEach((item, index) => {
-                    message += `  • Action ${index + 1}: ${item.action}\n`;
-                    if (item.parts) {
-                        message += `    Parts: ${item.parts}\n`;
-                    }
-                });
-            } else {
-                message += `No repair plan set yet.\n`;
-            }
-
-            if (data.errorCodes && data.errorCodes !== 'N/A') {
-                message += `\n*Error Codes*:\n${data.errorCodes}\n`;
-            }
-        }
-        
-        const whatsappUrl = `https://wa.me/${clientPhone}?text=${encodeURIComponent(message)}`;
-        window.open(whatsappUrl, '_blank');
+    const data = window.currentJobCardData;
+    if (!data) {
+        alert("No job card data loaded.");
+        return;
     }
+
+    const clientPhone = cleanPhoneNumber(data.clientPhone);
+    if (!clientPhone) {
+        alert("Invalid phone number for WhatsApp.");
+        return;
+    }
+    
+    let message = `*Garage Manager PRO Job Report*\n\n`;
+    message += `*Client*: ${data.clientName}\n`;
+    message += `*Vehicle*: ${data.make} ${data.model} (${data.plate})\n`;
+    message += `*Job Type*: ${data.jobType === 'GeneralService' ? 'General Service' : 'Standard Repair'}\n\n`;
+
+    if (data.jobType === 'GeneralService') {
+        message += `*Service Notes*:\n${data.diagnosticNotes}\n`;
+        message += `*Current Mileage*: ${data.currentMileage} KM\n`;
+        message += `*Next Service Est.*: ${data.nextServiceMileage} KM\n\n`;
+        message += `_For detailed checklist, please refer to the Service Report PDF._`;
+    } else {
+        message += `*Status*: ${data.status}\n`;
+        message += `*Mechanic*: ${data.assignedMechanic}\n`;
+        message += `*Est. Delivery*: ${data.deliveryDate}\n\n`;
+        message += `*Reported Problem*:\n${data.reportedProblems}\n\n`;
+        message += `*Diagnostic Notes*:\n${data.diagnosticNotes}\n\n`;
+        message += `*Repair Plan*:\n`;
+        if (data.repairPlanItems && data.repairPlanItems.length > 0) {
+            data.repairPlanItems.forEach((item, index) => {
+                message += `  • Action ${index + 1}: ${item.action}\n`;
+                if (item.parts) message += `    Parts: ${item.parts}\n`;
+            });
+        } else {
+            message += `No repair plan set yet.\n`;
+        }
+        if (data.errorCodes && data.errorCodes !== 'N/A') {
+            message += `\n*Error Codes*:\n${data.errorCodes}\n`;
+        }
+    }
+    
+    const whatsappUrl = `https://wa.me/${clientPhone}?text=${encodeURIComponent(message)}`;
+    window.open(whatsappUrl, '_blank');
+}
 
     // Function to generate the Analysis Report PDF
     function generateAnalysisReportPDF() {
@@ -1753,6 +1803,11 @@ function lookupClientDetails(section) {
 
     // Function to complete and save the service job (NEW FUNCTION)
     async function completeServiceJob() {
+         event.preventDefault();
+    if (isSavingService) return;
+    isSavingService = true;
+    
+    try {
         if (!auth.currentUser) {
             alert("You must be logged in to save an entry.");
             return;
@@ -1786,12 +1841,13 @@ function lookupClientDetails(section) {
             document.getElementById('general-service-form').reset();
             initializeGeneralService(); // Re-initialize tables
             showSection('completed-list'); // Go to the completed list view
-        } catch (error) {
-            console.error("Error saving General Service entry: ", error);
-            alert("Could not save General Service entry.");
-        }
+           } catch (error) {
+        console.error("Error in saveCarEntry: ", error);
+        alert("Could not save vehicle entry.");
+    } finally {
+        isSavingService = false;
     }
-
+}
     // Function to generate the General Service Report PDF
     function generateServiceReportPDF() {
         const data = collectGeneralServiceData();
