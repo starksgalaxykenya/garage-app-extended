@@ -2,7 +2,28 @@
 // FILE: management.js
 // Description: Logic for the secure Garage Management Console (GMC)
 // =================================================================
+// ========== UTILITY FUNCTIONS ==========
+// Returns UTC date string YYYY-MM-DD (timezone safe)
+function getUTCDateString(date = new Date()) {
+    return date.toISOString().split('T')[0];
+}
 
+// Standardize phone number cleaning for WhatsApp
+function cleanPhoneNumber(phone) {
+    let cleaned = phone.replace(/[^\d+]/g, '');
+    if (!cleaned.startsWith('+')) {
+        cleaned = cleaned.replace(/\D/g, '');
+    }
+    return cleaned;
+}
+
+// Debounce flags
+let isSavingJob = false;
+let isSavingGeneral = false;
+let isSavingPart = false;
+let isSavingSale = false;
+let isSavingInvoice = false;
+let isSavingQuote = false;
 // 1. FIREBASE CONFIGURATION (USE YOUR ACTUAL CONFIG HERE)
 const firebaseConfig = {
   apiKey: "AIzaSyBCvFltNyGj3SYR-ADUocWD5EVjljoCEp8",
@@ -174,7 +195,7 @@ jobForm.addEventListener('submit', async (e) => {
         profit: profit,
         timestamp: firebase.firestore.FieldValue.serverTimestamp(),
         isJob: true,
-        date: new Date().toLocaleDateString('en-CA') // YYYY-MM-DD
+        date: new Date().getUTCDateString() // YYYY-MM-DD
     };
 
     try {
@@ -207,7 +228,7 @@ generalForm.addEventListener('submit', async (e) => {
         profit: isIncome ? amount : -amount,
         timestamp: firebase.firestore.FieldValue.serverTimestamp(),
         isJob: false,
-        date: new Date().toLocaleDateString('en-CA') // YYYY-MM-DD
+        date: new Date().getUTCDateString() // YYYY-MM-DD
     };
 
     try {
@@ -224,7 +245,7 @@ generalForm.addEventListener('submit', async (e) => {
  * Real-time listener for today's transactions.
  */
 function listenForDailyTransactions() {
-    const today = new Date().toLocaleDateString('en-CA');
+    const today = new Date().getUTCDateString();
 
     dailyTransactionsRef
         .where('date', '==', today)
@@ -287,7 +308,7 @@ endDayBtn.addEventListener('click', async () => {
     if (currentDailyTransactions.length === 0) return;
     if (!confirm('Are you sure you want to end the day and save the P&L report? This action cannot be undone for today\'s transactions.')) return;
 
-    const date = new Date().toLocaleDateString('en-CA');
+    const date = new Date().getUTCDateString();
     const totalIncome = currentDailyTransactions.reduce((sum, t) => sum + t.income, 0);
     const totalExpense = currentDailyTransactions.reduce((sum, t) => sum + t.expense, 0);
     const netProfit = totalIncome - totalExpense;
@@ -615,7 +636,7 @@ sellPartForm.addEventListener('submit', async (e) => {
             profit: totalProfit,
             timestamp: firebase.firestore.FieldValue.serverTimestamp(),
             isJob: true,
-            date: new Date().toLocaleDateString('en-CA')
+            date: new Date().getUTCDateString()
         };
         batch.set(dailyTransactionsRef.doc(), financeTransaction);
 
@@ -786,7 +807,7 @@ orderWhatsappBtn.addEventListener('click', () => {
         return;
     }
     
-    const cleanedContact = supplier.contact.replace(/\D/g, ''); // Remove all non-digits
+     const cleanedContact = cleanPhoneNumber(supplier.contact);
     
     if (cleanedContact.length < 9) { // Simple validation for a cleaned phone number
         alert(`The contact number for ${supplier.name} seems invalid: ${supplier.contact}`);
@@ -900,7 +921,7 @@ invoiceCreationForm.addEventListener('submit', async (e) => {
         carPlate: document.getElementById('invoice-car-plate').value,
         items: items,
         total: totalAmount,
-        date: new Date().toLocaleDateString('en-CA'),
+        date: new Date().getUTCDateString(),
         timestamp: firebase.firestore.FieldValue.serverTimestamp()
     };
 
@@ -918,7 +939,7 @@ invoiceCreationForm.addEventListener('submit', async (e) => {
             profit: totalAmount,
             timestamp: firebase.firestore.FieldValue.serverTimestamp(),
             isJob: true,
-            date: new Date().toLocaleDateString('en-CA')
+            date: new Date().getUTCDateString()
         };
         await dailyTransactionsRef.add(financeTransaction);
         
@@ -1014,7 +1035,7 @@ async function generateInvoicePDF(invoiceId, clientPhone) {
         // --- SHARE VIA WHATSAPP ---
         if (confirm('PDF is generated. Do you want to share a text summary via WhatsApp?')) {
             const message = `*Garage Manager PRO Invoice* (No. ${invoice.invoiceNo})\n\nDear ${invoice.clientName},\n\nYour invoice is ready. Total amount: *$${invoice.total.toFixed(2)}*.\n\nThank you for your business!`;
-            const cleanedContact = clientPhone.replace(/\D/g, '');
+            const cleanedContact = cleanPhoneNumber(clientPhone);
             const encodedMessage = encodeURIComponent(message);
             const whatsappUrl = `https://wa.me/${cleanedContact}?text=${encodedMessage}`;
             window.open(whatsappUrl, '_blank');
@@ -1114,7 +1135,7 @@ quoteCreationForm.addEventListener('submit', async (e) => {
         carMake: document.getElementById('quote-car-make').value,
         items: items,
         total: totalAmount,
-        date: new Date().toLocaleDateString('en-CA'),
+        date: new Date().getUTCDateString(),
         timestamp: firebase.firestore.FieldValue.serverTimestamp()
     };
 
@@ -1218,7 +1239,7 @@ async function generateQuotePDF(quoteId, clientPhone) {
         // --- SHARE VIA WHATSAPP ---
         if (confirm('PDF is generated. Do you want to share a text summary via WhatsApp?')) {
             const message = `*Garage Manager PRO Repair Quote* (No. ${quote.quoteNo})\n\nDear ${quote.clientName},\n\nYour repair quote for the ${quote.carMake} is *$${quote.total.toFixed(2)}* (Estimated).\n\nPlease reply to confirm the repair.`;
-            const cleanedContact = clientPhone.replace(/\D/g, '');
+            const cleanedContact = cleanPhoneNumber(clientPhone);
             const encodedMessage = encodeURIComponent(message);
             const whatsappUrl = `https://wa.me/${cleanedContact}?text=${encodedMessage}`;
             window.open(whatsappUrl, '_blank');
